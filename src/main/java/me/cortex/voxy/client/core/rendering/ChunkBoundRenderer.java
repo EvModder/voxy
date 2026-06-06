@@ -13,7 +13,9 @@ import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
 import me.cortex.voxy.common.Logger;
+import me.cortex.voxy.common.util.MemoryBuffer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.SectionPos;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
@@ -39,6 +41,7 @@ public class ChunkBoundRenderer {
     private long[] idx2chunk = new long[INIT_MAX_CHUNK_COUNT];
     private final Shader rasterShader;
     private final RenderProperties properties;
+    private boolean previousFrameWasExact;
 
     private final LongOpenHashSet addQueue = new LongOpenHashSet();
     private final LongOpenHashSet remQueue = new LongOpenHashSet();
@@ -80,7 +83,15 @@ public class ChunkBoundRenderer {
     }
 
     //Bind and render, changing as little gl state as possible so that the caller may configure how it wants to render
-    public void render(Viewport<?> viewport) {
+    public void render(Viewport<?> viewport, boolean renderExactBounds) {
+        if (this.previousFrameWasExact && !renderExactBounds) {
+            //We need to reupload the buffer cause we trash it during exact render bound rendering
+            long addr = UploadStream.INSTANCE.upload(this.chunkPosBuffer, 0, this.chunk2idx.size()*8);
+            for (int i = 0; i < this.chunk2idx.size(); i++) {
+                putPos(addr, this.idx2chunk[i]); addr+=8;
+            }
+            UploadStream.INSTANCE.commit();
+        }
         if (!this.remQueue.isEmpty()) {
             boolean wasEmpty = this.chunk2idx.isEmpty();
             this.remQueue.forEach(this::_remPos);//TODO: REPLACE WITH SCATTER COMPUTE
@@ -89,22 +100,55 @@ public class ChunkBoundRenderer {
                 viewport.depthBoundingBuffer.clear(this.properties.inverseClearDepth());
             }
         }
+        final float renderDistance = Minecraft.getInstance().options.getEffectiveRenderDistance()*16;//In blocks
 
-        if (this.chunk2idx.isEmpty() && this.addQueue.isEmpty()) return;
+        int count = this.chunk2idx.size();
+        if (renderExactBounds) {
+            {
+                long addr = UploadStream.INSTANCE.uploadTo(this.chunkPosBuffer);
+                count = findEmitBoundingChunks(viewport, renderDistance, (int) (this.chunkPosBuffer.size() / 8), addr);
+                UploadStream.INSTANCE.commit();
+            }
+            if (count<0) {
+                this.chunkPosBuffer.free();//Destroy old
+                var chunkPoss = new MemoryBuffer((-count) * 8L);
+                count = findEmitBoundingChunks(viewport, renderDistance, -count, chunkPoss.address);
+                if (count<0) {
+                    chunkPoss.free();
+                    throw new IllegalStateException("Not sure how this is possible, should have exact capacity. badness: " + count);
+                }
+                this.chunkPosBuffer = new GlBuffer(chunkPoss);//Setup new buffer with the new data
+                chunkPoss.free();
+                ((AutoBindingShader)this.rasterShader).ssbo(1, this.chunkPosBuffer);
+            }
+        }
 
+        this.renderInner(viewport, renderDistance, count);
+
+
+        if (!this.addQueue.isEmpty()) {
+            this.addQueue.forEach(this::_addPos);//TODO: REPLACE WITH SCATTER COMPUTE
+            this.addQueue.clear();
+            UploadStream.INSTANCE.commit();
+        }
+        this.previousFrameWasExact = renderExactBounds;
+    }
+
+    private void renderInner(Viewport<?> viewport, float renderDistanceBlocks, int chunkCount) {
         viewport.depthBoundingBuffer.clear(this.properties.inverseClearDepth());
+        if (chunkCount == 0) {
+            return;
+        }
 
         long ptr = UploadStream.INSTANCE.upload(this.uniformBuffer, 0, 128);
         long matPtr = ptr; ptr += 4*4*4;
 
-        final float renderDistance = Minecraft.getInstance().options.getEffectiveRenderDistance()*16;//In blocks
-
         {//This is recomputed to be in chunk section space not worldsection
 
             //Camera block pos
-            int bx = (int)(viewport.cameraX);
-            int by = (int)(viewport.cameraY);
-            int bz = (int)(viewport.cameraZ);
+            int bx = (int)Math.floor(viewport.cameraX);
+            int by = (int)Math.floor(viewport.cameraY);
+            int bz = (int)Math.floor(viewport.cameraZ);
             new Vector3i(bx, by, bz).getToAddress(ptr); ptr += 4*4;
 
             var negInnerBlock = new Vector3f(
@@ -115,7 +159,7 @@ public class ChunkBoundRenderer {
 
             negInnerBlock.getToAddress(ptr); ptr += 4*3;
             viewport.MVP.translate(negInnerBlock.negate(), new Matrix4f()).getToAddress(matPtr);
-            MemoryUtil.memPutFloat(ptr, renderDistance); ptr += 4;
+            MemoryUtil.memPutFloat(ptr, renderDistanceBlocks); ptr += 4;
         }
         UploadStream.INSTANCE.commit();
 
@@ -138,7 +182,7 @@ public class ChunkBoundRenderer {
         if (this.pipeline != null) this.pipeline.bindUniforms();//shader TAA
 
         //Batch the draws into groups of size 32
-        int count = this.chunk2idx.size();
+        int count = chunkCount;
         if (count >= 32) {
             glDrawElementsInstanced(GL_TRIANGLES, 6 * 2 * 3 * 32, GL_UNSIGNED_BYTE, 0, count/32);
         }
@@ -154,13 +198,6 @@ public class ChunkBoundRenderer {
             //TODO: check this is correct
             glEnable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
-        }
-
-
-        if (!this.addQueue.isEmpty()) {
-            this.addQueue.forEach(this::_addPos);//TODO: REPLACE WITH SCATTER COMPUTE
-            this.addQueue.clear();
-            UploadStream.INSTANCE.commit();
         }
     }
 
@@ -225,8 +262,11 @@ public class ChunkBoundRenderer {
     private void put(int idx, long pos) {
         long ptr2 = UploadStream.INSTANCE.upload(this.chunkPosBuffer, 8L*idx, 8);
         //Need to do it in 2 parts because ivec2 is 2 parts
-        MemoryUtil.memPutInt(ptr2, (int)(pos&0xFFFFFFFFL)); ptr2 += 4;
-        MemoryUtil.memPutInt(ptr2, (int)((pos>>>32)&0xFFFFFFFFL));
+        putPos(ptr2, pos);
+    }
+    private static void putPos(long ptr, long pos) {
+        MemoryUtil.memPutInt(ptr, (int)(pos&0xFFFFFFFFL)); ptr += 4;
+        MemoryUtil.memPutInt(ptr, (int)((pos>>>32)&0xFFFFFFFFL));
     }
 
     public void reset() {
@@ -237,5 +277,117 @@ public class ChunkBoundRenderer {
         this.rasterShader.free();
         this.uniformBuffer.free();
         this.chunkPosBuffer.free();
+    }
+
+
+
+
+
+
+
+    private static int findEmitBoundingChunks(Viewport<?> viewport, float searchDistance, int capacity, long writePtr) {
+        if (capacity == -1) {
+            writePtr = 0;
+            capacity = Integer.MAX_VALUE;
+        }
+        //WTAF IS THIS HORRIFIC CODE, _screams_ this is so so bad, and jank and slow and orrible but
+        // headache hard think
+        float d2 = searchDistance*searchDistance;
+        int bx = (int)Math.floor(viewport.cameraX);
+        int by = (int)Math.floor(viewport.cameraY);
+        int bz = (int)Math.floor(viewport.cameraZ);
+        float fy = (float) (viewport.cameraY - (int)viewport.cameraY);
+        float fx = (float) (viewport.cameraX - (int)viewport.cameraX);
+        float fz = (float) (viewport.cameraZ - (int)viewport.cameraZ);
+
+
+        //Inclusive
+        int mincy = by>>4;
+        int maxcy = by>>4;
+        {
+            while (testYPos(by, fy, mincy, searchDistance)) {
+                mincy--;
+            }
+            mincy++;
+            while (testYPos(by, fy, maxcy, searchDistance)) {
+                maxcy++;
+            }
+            maxcy--;
+        }
+
+        int count = 0;
+
+        final long bpos = Integer.toUnsignedLong(bx)|(Integer.toUnsignedLong(bz)<<32);
+        int minsx = ((int)Math.floor(viewport.cameraX-searchDistance)>>4)-2;
+        int maxsx = ((int)Math.ceil(viewport.cameraX+searchDistance)>>4)+2;
+        int minsz = ((int)Math.floor(viewport.cameraZ-searchDistance)>>4)-2;
+        int maxsz = ((int)Math.ceil(viewport.cameraZ+searchDistance)>>4)+2;
+        for (int cx = minsx; cx<maxsx; cx++) {
+            for (int cz = minsz; cz<maxsz; cz++) {
+                if (testXZPos(bpos, fx, fz, cx, cz, d2)) {
+                    //Corner exposed
+                    if ((!testXZPos(bpos, fx, fz, cx+1, cz+1, d2))||
+                            (!testXZPos(bpos, fx, fz, cx-1, cz+1, d2))||
+                            (!testXZPos(bpos, fx, fz, cx+1, cz-1, d2))||
+                            (!testXZPos(bpos, fx, fz, cx-1, cz-1, d2))) {
+                        //Emit column
+                        for (int cy = mincy+1; cy<maxcy; cy++) {
+                            if (count++<capacity && writePtr != 0) {
+                                putPos(writePtr, SectionPos.asLong(cx,cy,cz));
+                                writePtr += 8;
+                            }
+                        }
+                    }
+                    if (maxcy!=mincy) {
+                        //Emit 2 points at mincy, maxcy (assuming that mincy!=maxcy)
+                        if (count++<capacity && writePtr != 0) {
+                            putPos(writePtr, SectionPos.asLong(cx,maxcy,cz));
+                            writePtr += 8;
+                        }
+                        if (count++<capacity && writePtr != 0) {
+                            putPos(writePtr, SectionPos.asLong(cx,mincy,cz));
+                            writePtr += 8;
+                        }
+                    } else {
+                        //emit 1 point
+                        if (count++<capacity && writePtr != 0) {
+                            putPos(writePtr, SectionPos.asLong(cx,mincy,cz));
+                            writePtr += 8;
+                        }
+                    }
+                }
+            }
+        }
+        if (count>capacity) {
+            return -count;
+        }
+        return count;
+    }
+
+    private static boolean testYPos(int by, float fy, int cy, float d) {
+        int ry =  cy*16-by;
+        float dy = (float)nearestToZero(ry - 1, ry + 17) - fy;
+        return Math.abs(dy) < d;
+    }
+
+    private static boolean testXZPos(long bpos, float fx, float fz, int cx, int cy, float d2) {
+        int rx =  cx*16-((int)bpos);
+        int rz =  cy*16-((int)(bpos>>32));
+        float dx = (float)nearestToZero(rx - 1, rx + 17) - fx;
+        float dz = (float)nearestToZero(rz - 1, rz + 17) - fz;
+        return dx * dx + dz * dz < d2;
+    }
+
+    private static int nearestToZero(int min, int max) {
+        int clamped = 0;
+        if (min > 0) {
+            clamped = min;
+        }
+
+        if (max < 0) {
+            clamped = max;
+        }
+
+        return clamped;
     }
 }
