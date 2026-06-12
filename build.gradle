@@ -119,6 +119,45 @@ if (!isInGHA) {
     }
 }
 
+def smartDependency(String property, boolean runtime = false, String maven = null, boolean compile = true) {
+    String ver;
+    if (project.hasProperty("runtime."+property)) {
+        ver = project["runtime."+property];
+        runtime = true
+    } else {
+        ver = project[property];
+    }
+
+    if (ver == null) {
+        return null;
+    }
+
+    Object dep;
+    if (ver.endsWith(".jar")) {
+        //File type
+        dep = file(ver)
+    } else {//Asume mvn
+        //Hack, default modrinth maven
+        if (maven == null) {
+            maven = "maven.modrinth:"+(property.split("_")[0])
+        }
+
+        dep = (maven!=null?(maven+":"):"")+ver;
+    }
+    dependencies {
+        if (compile && runtime) {
+            implementation(dep)
+        } else {
+            if (compile) {
+                compileOnly(dep)
+            } else {
+                runtimeOnlyMsk(dep)
+            }
+        }
+    }
+    return ver
+}
+
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -139,22 +178,24 @@ dependencies {
         implementation "net.caffeinemc:sodium-fabric:${project.sodium_version}"
     }
 
-    implementation("maven.modrinth:lithium:mc26.1.2-0.24.2-fabric")
+    //implementation("maven.modrinth:lithium:mc26.1.2-0.24.2-fabric")
 
     //modRuntimeOnlyMsk "drouarb:nvidium:0.4.1-beta4:1.21.6@jar"
-    compileOnly("drouarb:nvidium:0.4.1-beta4:1.21.6@jar")
+    //compileOnly("drouarb:nvidium:0.4.1-beta4:1.21.6@jar")
 
-    compileOnly("maven.modrinth:modmenu:18.0.0-alpha.8")
-    runtimeOnlyMsk("maven.modrinth:modmenu:18.0.0-alpha.8")
-
-    compileOnly("maven.modrinth:iris:1.10.9+26.1-fabric")
-    runtimeOnlyMsk("maven.modrinth:iris:1.10.9+26.1-fabric")
+    smartDependency("lithium_version", true)
+    smartDependency("modmenu_version", true)
+    smartDependency("iris_version")
+    smartDependency("chunky_version")
+    smartDependency("vivecraft_version")
+    smartDependency("flashback_version")
+    smartDependency("nvidium_version", false, "drouarb:nvidium")
 
     //modCompileOnly("maven.modrinth:starlight:1.1.3+1.20.4")
 
     //modCompileOnly("maven.modrinth:immersiveportals:v5.1.7-mc1.20.4")
 
-    compileOnly("maven.modrinth:chunky:DCgX52a5")
+    //compileOnly("maven.modrinth:chunky:DCgX52a5")
     //modRuntimeOnlyMsk("maven.modrinth:chunky:1.4.40-fabric")
 
     //modRuntimeOnlyMsk("maven.modrinth:spark:1.10.152-fabric")
@@ -163,9 +204,9 @@ dependencies {
 
     //modImplementation('io.github.douira:glsl-transformer:2.0.1')
 
-    compileOnly("maven.modrinth:vivecraft:26.1.1-1.3.7-b2-fabric")
+    //compileOnly("maven.modrinth:vivecraft:26.1.1-1.3.7-b2-fabric")
 
-    compileOnly("maven.modrinth:flashback:VaqZB1DF")
+    //compileOnly("maven.modrinth:flashback:VaqZB1DF")
 }
 
 
