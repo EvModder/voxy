@@ -124,7 +124,10 @@ def smartDependency(String property, boolean runtime = false, String maven = nul
     if (project.hasProperty("runtime."+property)) {
         ver = project["runtime."+property];
         runtime = true
-    } else {
+    } else if (project.hasProperty("compileOnly."+property)) {
+        ver = project["compileOnly."+property];
+        runtime = false
+    }  else {
         ver = project[property];
     }
 
@@ -183,8 +186,8 @@ dependencies {
     //modRuntimeOnlyMsk "drouarb:nvidium:0.4.1-beta4:1.21.6@jar"
     //compileOnly("drouarb:nvidium:0.4.1-beta4:1.21.6@jar")
 
-    smartDependency("lithium_version", true)
     smartDependency("modmenu_version", true)
+    smartDependency("lithium_version", true)
     smartDependency("iris_version")
     smartDependency("chunky_version")
     smartDependency("vivecraft_version")
