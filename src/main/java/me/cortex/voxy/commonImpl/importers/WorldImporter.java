@@ -77,7 +77,7 @@ public class WorldImporter implements IDataImporter {
 
             @Override
             public void getAll(Consumer<Holder<Biome>> action) {
-
+                action.accept(defaultBiome);
             }
 
             @Override
@@ -97,12 +97,17 @@ public class WorldImporter implements IDataImporter {
 
             @Override
             public boolean maybeHas(Predicate<Holder<Biome>> predicate) {
-                return false;
+                return predicate.test(defaultBiome);
+            }
+
+            @Override
+            public void forEachInPalette(Consumer<Holder<Biome>> consumer) {
+                consumer.accept(defaultBiome);
             }
 
             @Override
             public void count(PalettedContainer.CountConsumer<Holder<Biome>> counter) {
-
+                counter.accept(defaultBiome, 1);
             }
 
             @Override

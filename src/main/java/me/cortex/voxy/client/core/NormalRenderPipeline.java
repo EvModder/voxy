@@ -51,7 +51,7 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
     }
 
     @Override
-    protected int setup(Viewport<?> viewport, int sourceFB, int srcWidth, int srcHeight) {
+    protected int setup(Viewport<?> viewport, int sourceDepthTex, int srcWidth, int srcHeight) {
         if (this.colourTex == null || this.colourTex.getHeight() != viewport.height || this.colourTex.getWidth() != viewport.width) {
             if (this.colourTex != null) {
                 this.colourTex.free();
@@ -73,20 +73,20 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
             glTextureParameterf(this.fb.getDepthTex().id, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);
         }
 
-        this.initDepthStencil(sourceFB, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);
+        this.initDepthStencil(sourceDepthTex, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);
 
         return this.fb.getDepthTex().id;
     }
 
     @Override
-    protected void postOpaquePreTranslucent(Viewport<?> viewport, int sourceFrameBuffer) {
+    protected void postOpaquePreTranslucent(Viewport<?> viewport, int sourceDepthTexture) {
         GPUTiming.INSTANCE.marker("ao");
-        this.ssao.computeSSAO(viewport, this.colourSSAOTex, this.colourTex, this.fb.getDepthTex(), sourceFrameBuffer);
+        this.ssao.computeSSAO(viewport, this.colourSSAOTex, this.colourTex, this.fb.getDepthTex(), sourceDepthTexture);
         glBindFramebuffer(GL_FRAMEBUFFER, this.fbSSAO.id);
     }
 
     @Override
-    protected void finish(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {
+    protected void finish(Viewport<?> viewport, int sourceDepthTexture, int outputFramebuffer, int srcWidth, int srcHeight) {
         this.finalBlit.bind();
 
         boolean fogCoversAllRendering = viewport.fogParameters.environmentalEnd()<VoxyRenderSystem.getRenderDistance();
@@ -114,7 +114,7 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
         if (!fogCoversAllRendering) {
             glEnable(GL_BLEND);
             glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-            AbstractRenderPipeline.transformBlitDepth(this.finalBlit, this.fb.getDepthTex().id, sourceFrameBuffer, viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+            AbstractRenderPipeline.transformBlitDepth(this.finalBlit, this.fb.getDepthTex().id, outputFramebuffer, viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
             glDisable(GL_BLEND);
         } else {
             glDisable(GL_STENCIL_TEST);

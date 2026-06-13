@@ -1,11 +1,11 @@
 package me.cortex.voxy.client.core.model.bakery;
 
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.TextureFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import me.cortex.voxy.client.core.model.ModelFactory;
 import me.cortex.voxy.common.util.UnsafeUtil;
@@ -68,8 +68,8 @@ public class SoftwareModelTextureBakery {
 
     public void setupTexture() {
         var tex = Minecraft.getInstance().getTextureManager().getTexture(Identifier.fromNamespaceAndPath("minecraft", "textures/atlas/blocks.png")).getTexture();
-        if (tex.getFormat() != TextureFormat.RGBA8) {
-            throw new IllegalStateException("Block atlas not rgba8");
+        if (tex.getFormat() != GpuFormat.RGBA8_UNORM) {
+            throw new IllegalStateException("Block atlas not rgba8: " + tex.getFormat());
         }
 
         int targetMipLevel = 0;// Math.min(tex.getMipLevels(), 4)-1;//todo: we want to target the mip layer that has the 16x16 sized textures

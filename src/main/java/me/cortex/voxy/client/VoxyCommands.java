@@ -6,13 +6,12 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-import me.cortex.voxy.client.core.IGetVoxyRenderSystem;
+import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.common.DebugUtils;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import me.cortex.voxy.commonImpl.WorldIdentifier;
 import me.cortex.voxy.commonImpl.importers.DHImporter;
 import me.cortex.voxy.commonImpl.importers.WorldImporter;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
@@ -81,16 +80,17 @@ public class VoxyCommands {
             ctx.getSource().sendError(Component.translatable("Voxy must be enabled in settings to use this"));
             return 1;
         }
-        var wr = Minecraft.getInstance().levelRenderer;
-        if (wr!=null) {
-            ((IGetVoxyRenderSystem)wr).voxy$shutdownRenderer();
+
+        var vrsh = IVoxyRenderSystemHolder.getNullableHolder();
+        if (vrsh!=null) {
+            vrsh.voxy$shutdownRenderer();
         }
 
         VoxyCommon.shutdownInstance();
         System.gc();
         VoxyCommon.createInstance();
 
-        var r = Minecraft.getInstance().levelRenderer;
+        var r = Minecraft.getInstance().levelExtractor;
         if (r != null) r.allChanged();
         return 0;
     }

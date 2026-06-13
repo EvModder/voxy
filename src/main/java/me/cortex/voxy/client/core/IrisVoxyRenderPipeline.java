@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core;
 
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.model.ModelBakerySubsystem;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
@@ -113,7 +114,7 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
     }
 
     @Override
-    protected int setup(Viewport<?> viewport, int sourceFramebuffer, int srcWidth, int srcHeight) {
+    protected int setup(Viewport<?> viewport, int sourceDepthTexture, int srcWidth, int srcHeight) {
         this.fb.resize(viewport.width, viewport.height);
         this.fbTranslucent.resize(viewport.width, viewport.height);
 
@@ -128,12 +129,12 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
             srcWidth = viewport.width;
             srcHeight = viewport.height;
         }
-        this.initDepthStencil(sourceFramebuffer, this.fb.framebuffer.id, srcWidth, srcHeight, viewport.width, viewport.height);
+        this.initDepthStencil(sourceDepthTexture, this.fb.framebuffer.id, srcWidth, srcHeight, viewport.width, viewport.height);
         return this.fb.getDepthTex().id;
     }
 
     @Override
-    protected void postOpaquePreTranslucent(Viewport<?> viewport, int sourceFrameBuffer) {
+    protected void postOpaquePreTranslucent(Viewport<?> viewport, int sourceDepthTexture) {
         if (this.shaderDepthHackFixTransformBlit != null) {
             this.fb.bind();
             glEnable(GL_DEPTH_TEST);
@@ -162,11 +163,11 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
     }
 
     @Override
-    protected void finish(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {
+    protected void finish(Viewport<?> viewport, int sourceDepthTexture, int outputFramebuffer, int srcWidth, int srcHeight) {
         if (this.data.renderToVanillaDepth && srcWidth == viewport.width  && srcHeight == viewport.height) {//We can only depthblit out if destination size is the same
             glColorMask(false, false, false, false);
             AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
-                    this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                    this.fbTranslucent.getDepthTex().id, outputFramebuffer,
                     viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
             glColorMask(true, true, true, true);
         } else {

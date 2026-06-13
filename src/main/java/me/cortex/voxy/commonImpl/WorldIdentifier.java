@@ -64,13 +64,17 @@ public class WorldIdentifier {
 
     //Quick access utility method to get or create a world object in the current instance
     public WorldEngine getOrCreateEngine() {
+        return getOrCreateEngine(false);
+    }
+
+    public WorldEngine getOrCreateEngine(boolean allowNull) {
         var instance = VoxyCommon.getInstance();
         if (instance == null) {
             this.cachedEngineObject = null;
             return null;
         }
         var engine = instance.getOrCreate(this);
-        if (engine==null) {
+        if (allowNull&&engine==null) {
             throw new IllegalStateException("Engine null on creation");
         }
         return engine;

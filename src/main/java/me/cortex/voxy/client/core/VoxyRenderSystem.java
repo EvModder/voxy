@@ -40,6 +40,8 @@ import org.lwjgl.opengl.GL11;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteri;
+import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteriv;
 import static org.lwjgl.opengl.GL11.GL_VIEWPORT;
 import static org.lwjgl.opengl.GL11.glGetIntegerv;
 import static org.lwjgl.opengl.GL11C.*;
@@ -50,7 +52,6 @@ import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER_BINDING;
 
 public class VoxyRenderSystem {
     private final WorldEngine worldIn;
-
 
     private final ModelBakerySubsystem modelService;
     private final RenderGenerationService renderGen;
@@ -84,7 +85,7 @@ public class VoxyRenderSystem {
         if (Minecraft.getInstance().options.renderDistance().get()<3) {
             String msg = "Voxy: Having a vanilla render distance of 2 can cause rare culling near the edge of your screen issues, please use 3 or more";
             Logger.warn(msg);
-            Minecraft.getInstance().getChatListener().handleSystemMessage(Component.literal(msg), false);
+            Minecraft.getInstance().gui.chatListener().handleSystemMessage(Component.literal(msg), false);
         }
 
         //Fking HATE EVERYTHING AAAAAAAAAAAAAAAA
@@ -170,7 +171,7 @@ public class VoxyRenderSystem {
     }
 
 
-    public Viewport<?> setupViewport(Matrix4fc vanillaProjection, Matrix4fc modelView, FogParameters fogParameters, double cameraX, double cameraY, double cameraZ) {
+    public Viewport<?> setupViewport(Matrix4fc vanillaProjection, Matrix4fc modelView, FogParameters fogParameters, int width, int height, double cameraX, double cameraY, double cameraZ) {
         var viewport = this.getViewport();
         if (viewport == null) {
             return null;
@@ -186,11 +187,13 @@ public class VoxyRenderSystem {
         //cameraY += 100;
         var voxyProjection = computeProjectionMat(this.properties, vanillaProjection);
 
+        /*
         int[] dims = new int[4];
         glGetIntegerv(GL_VIEWPORT, dims);
 
         int width = dims[2];
         int height = dims[3];
+        */
 
         {//Apply render scaling factor
             var factor = this.pipeline.getRenderScalingFactor();
@@ -220,13 +223,18 @@ public class VoxyRenderSystem {
         return viewport;
     }
 
-    public void renderOpaque(Viewport<?> viewport) {
+    public void renderOpaque(Viewport<?> viewport, int sourceDepthTexture, int sourceColourTexture) {
         if (viewport == null) {
             return;
         }
+
         if (viewport.width <= 0 || viewport.height <= 0) {
             Logger.error("Viewport width or height was zero, this is bad bad bad, exiting frame");
             return;//Only render on valid viewport
+        }
+
+        if (sourceDepthTexture == 0) {
+            throw new IllegalStateException("Source depth texture cannot be 0");
         }
 
         TimingStatistics.resetSamplers();
@@ -234,6 +242,9 @@ public class VoxyRenderSystem {
         TimingStatistics.all.start();
         GPUTiming.INSTANCE.marker();//Start marker
         TimingStatistics.main.start();
+
+        int scrWidth  = glGetTextureLevelParameteri(sourceDepthTexture, 0, GL_TEXTURE_WIDTH);
+        int scrHeight = glGetTextureLevelParameteri(sourceDepthTexture, 0, GL_TEXTURE_WIDTH);
 
         //TODO: optimize
         int[] oldBufferBindings = new int[10];
@@ -243,20 +254,13 @@ public class VoxyRenderSystem {
 
 
         int oldFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
-        int boundFB = oldFB;
 
         int[] dims = new int[4];
         glGetIntegerv(GL_VIEWPORT, dims);
 
         glViewport(0,0, viewport.width, viewport.height);
-
-        //var target = DefaultTerrainRenderPasses.CUTOUT.getTarget();
-        //boundFB = ((net.minecraft.client.texture.GlTexture) target.getColorAttachment()).getOrCreateFramebuffer(((GlBackend) RenderSystem.getDevice()).getFramebufferManager(), target.getDepthAttachment());
-        if (boundFB == 0) {
-            throw new IllegalStateException("Cannot use the default framebuffer as cannot source from it");
-        }
-
         //this.autoBalanceSubDivSize();
+
 
         this.pipeline.preSetup(viewport);
 
@@ -271,7 +275,7 @@ public class VoxyRenderSystem {
 
         GPUTiming.INSTANCE.marker();
         //The entire rendering pipeline (excluding the chunkbound thing)
-        this.pipeline.runPipeline(viewport, boundFB, dims[2], dims[3]);
+        this.pipeline.runPipeline(viewport, sourceDepthTexture, sourceColourTexture, scrWidth, scrHeight);
         GPUTiming.INSTANCE.marker();
 
 
@@ -415,7 +419,7 @@ public class VoxyRenderSystem {
     private static Matrix4f computeProjectionMat(RenderProperties properties, Matrix4fc base) {
 
         //this jank is to capture the extra crap they inject like viewbobbing
-        var rawMCProj = Minecraft.getInstance().gameRenderer.getGameRenderState().levelRenderState.cameraRenderState.projectionMatrix;
+        var rawMCProj = Minecraft.getInstance().gameRenderer.gameRenderState().levelRenderState.cameraRenderState.projectionMatrix;
         var extraProjection = rawMCProj.invert(new Matrix4f()).mul(base);
 
         float near = getRenderDistance()<=32.0f?8f:16f;

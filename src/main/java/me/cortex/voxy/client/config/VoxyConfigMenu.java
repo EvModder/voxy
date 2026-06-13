@@ -2,7 +2,7 @@ package me.cortex.voxy.client.config;
 
 import me.cortex.voxy.client.ClientSessionEvents;
 import me.cortex.voxy.client.config.SodiumConfigBuilder.*;
-import me.cortex.voxy.client.core.IGetVoxyRenderSystem;
+import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.SSAO;
 import me.cortex.voxy.client.core.util.IrisUtil;
 import me.cortex.voxy.common.util.cpu.CpuLayout;
@@ -13,7 +13,6 @@ import net.caffeinemc.mods.sodium.api.config.option.OptionFlag;
 import net.caffeinemc.mods.sodium.api.config.option.OptionImpact;
 import net.caffeinemc.mods.sodium.api.config.option.Range;
 import net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
@@ -51,7 +50,7 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                                         })
                                         .setPostChangeRunner(c->{
                                             if (!c) {
-                                                var vrsh = (IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer;
+                                                var vrsh = IVoxyRenderSystemHolder.getNullableHolder();
                                                 if (vrsh != null) {
                                                     vrsh.voxy$shutdownRenderer();
                                                 }
@@ -84,7 +83,7 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                                         Component.translatable("voxy.config.general.rendering"),
                                         ()->CFG.enableRendering, v->CFG.enableRendering=v)
                                         .setPostChangeRunner(c->{
-                                            var vrsh = (IGetVoxyRenderSystem)Minecraft.getInstance().levelRenderer;
+                                            var vrsh = IVoxyRenderSystemHolder.getNullableHolder();
                                             if (vrsh != null) {
                                                 if (c) {
                                                     vrsh.voxy$createRenderer();
@@ -112,13 +111,10 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                                         // the value is displayed as a chunk render distance
                                         .setFormatter(v->Component.literal(Integer.toString(v*2)))
                                         .setPostChangeRunner(c->{
-                                            var vrsh = (IGetVoxyRenderSystem)Minecraft.getInstance().levelRenderer;
-                                            if (vrsh != null) {
-                                                var vrs = vrsh.voxy$getRenderSystem();
-                                                if (vrs != null) {
-                                                    //CFG.sectionRenderDistance == c/16
-                                                    vrs.setRenderDistance(CFG.sectionRenderDistance);
-                                                }
+                                            var vrs = IVoxyRenderSystemHolder.getNullable();
+                                            if (vrs != null) {
+                                                //CFG.sectionRenderDistance == c/16
+                                                vrs.setRenderDistance(CFG.sectionRenderDistance);
                                             }
                                         }, "voxy:rendering", RENDER_RELOAD)
                                         .setImpact(OptionImpact.MEDIUM)
