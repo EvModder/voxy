@@ -89,8 +89,10 @@ processResources {
     def version = project.version
 
     StringBuilder sodium_versions_builder = new StringBuilder("[");
-    for (var ver : project.properties.getOrDefault("sodium_extra_allows","").split(" ")) {
-        sodium_versions_builder.append("\"=").append(ver).append("\", ");
+    for (String ver : project.properties.getOrDefault("sodium_extra_allows","").split(" ")) {
+        if (!ver.isBlank()) {
+            sodium_versions_builder.append("\"=").append(ver).append("\", ");
+        }
     }
     String current_sodium_version;
     if (project.hasProperty("sodium_version_modrinth")) {
@@ -104,6 +106,7 @@ processResources {
     var sodium_versions = sodium_versions_builder.toString();
 
     var allowed_mc_version = project.properties.minecraft_version.split("-")[0];
+    allowed_mc_version = "[\">="+allowed_mc_version+"- <=" + allowed_mc_version + "\", \"~"+allowed_mc_version+"\"]";
 
     inputs.properties("version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version)
     filesMatching("fabric.mod.json") {
