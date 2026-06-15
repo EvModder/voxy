@@ -1,4 +1,4 @@
-package me.cortex.voxy.client.mixin.minecraft;
+package me.cortex.voxy.client.mixin.minecraft.util;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
