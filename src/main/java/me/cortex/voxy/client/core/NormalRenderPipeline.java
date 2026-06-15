@@ -73,8 +73,7 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
             glTextureParameterf(this.fb.getDepthTex().id, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);
         }
 
-        this.initDepthStencil(sourceDepthTex, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);
-
+        this.initDepthStencil(sourceDepthTex, this.fb.framebuffer.id, srcWidth, srcHeight, viewport.width, viewport.height);
         return this.fb.getDepthTex().id;
     }
 
@@ -88,7 +87,6 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
     @Override
     protected void finish(Viewport<?> viewport, int sourceDepthTexture, int outputFramebuffer, int srcWidth, int srcHeight) {
         this.finalBlit.bind();
-
         boolean fogCoversAllRendering = viewport.fogParameters.environmentalEnd()<VoxyRenderSystem.getRenderDistance();
 
         if (this.useEnvFog) {

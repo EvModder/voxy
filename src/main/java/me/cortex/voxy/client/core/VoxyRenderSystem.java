@@ -42,7 +42,6 @@ import java.util.List;
 
 import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteri;
 import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteriv;
-import static org.lwjgl.opengl.GL11.GL_VIEWPORT;
 import static org.lwjgl.opengl.GL11.glGetIntegerv;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL30C.*;
@@ -223,6 +222,7 @@ public class VoxyRenderSystem {
         return viewport;
     }
 
+
     public void renderOpaque(Viewport<?> viewport, int sourceDepthTexture, int sourceColourTexture) {
         if (viewport == null) {
             return;
@@ -243,9 +243,6 @@ public class VoxyRenderSystem {
         GPUTiming.INSTANCE.marker();//Start marker
         TimingStatistics.main.start();
 
-        int scrWidth  = glGetTextureLevelParameteri(sourceDepthTexture, 0, GL_TEXTURE_WIDTH);
-        int scrHeight = glGetTextureLevelParameteri(sourceDepthTexture, 0, GL_TEXTURE_WIDTH);
-
         //TODO: optimize
         int[] oldBufferBindings = new int[10];
         for (int i = 0; i < oldBufferBindings.length; i++) {
@@ -258,9 +255,13 @@ public class VoxyRenderSystem {
         int[] dims = new int[4];
         glGetIntegerv(GL_VIEWPORT, dims);
 
-        glViewport(0,0, viewport.width, viewport.height);
         //this.autoBalanceSubDivSize();
 
+
+        glViewport(0, 0, viewport.width, viewport.height);
+
+        int scrWidth  = glGetTextureLevelParameteri(sourceDepthTexture, 0, GL_TEXTURE_WIDTH);
+        int scrHeight = glGetTextureLevelParameteri(sourceDepthTexture, 0, GL_TEXTURE_HEIGHT);
 
         this.pipeline.preSetup(viewport);
 
@@ -295,6 +296,11 @@ public class VoxyRenderSystem {
             do { this.modelService.tick(900_000); } while (VoxyClient.isFrexActive() && !this.modelService.areQueuesEmpty());
             TimingStatistics.H.stop();
         }
+
+
+
+
+
         GPUTiming.INSTANCE.marker();
         TimingStatistics.postDynamic.stop();
 
