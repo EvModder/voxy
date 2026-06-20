@@ -25,6 +25,10 @@ import static org.lwjgl.opengl.GL31.GL_UNIFORM_BUFFER;
 import static org.lwjgl.opengl.GL45C.*;
 
 public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
+    private static final int UNIFORM_BINDING_POINT = 7;//TODO make ths binding point... not randomly 5
+    private static final int BASE_BUFFER_BINDING_INDEX = 10;//TODO make ths binding point... not randomly 10
+    private static final int BASE_SAMPLER_BINDING_INDEX = 6;//TODO make ths binding point... not randomly 6
+
     private final IrisVoxyRenderPipelineData data;
     private final FullscreenBlit depthBlit;
     public final DepthFramebuffer fbTranslucent = new DepthFramebuffer(this.fb.getFormat());
@@ -193,12 +197,13 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
     private void doBindings() {
         this.bindUniforms();
         if (this.data.getSsboSet() != null) {
-            this.data.getSsboSet().bindingFunction().accept(10);
+            this.data.getSsboSet().bindingFunction().accept(BASE_BUFFER_BINDING_INDEX);
         }
         if (this.data.getImageSet() != null) {
-            this.data.getImageSet().bindingFunction().accept(6);
+            this.data.getImageSet().bindingFunction().accept(BASE_SAMPLER_BINDING_INDEX);
         }
     }
+
     @Override
     public void setupAndBindOpaque(Viewport<?> viewport) {
         this.fb.bind();
@@ -220,8 +225,6 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
         super.addDebug(debug);
     }
 
-    private static final int UNIFORM_BINDING_POINT = 7;//TODO make ths binding point... not randomly 5
-
     private StringBuilder buildGenericShaderHeader(AbstractSectionRenderer<?, ?> renderer, String input) {
         StringBuilder builder = new StringBuilder(input).append("\n\n\n");
 
@@ -232,12 +235,12 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
         }
 
         if (this.data.getSsboSet() != null) {
-            builder.append("#define BUFFER_BINDING_INDEX_BASE 10\n");//TODO: DONT RANDOMLY MAKE THIS 10
+            builder.append("#define BUFFER_BINDING_INDEX_BASE "+BASE_BUFFER_BINDING_INDEX+"\n");
             builder.append(this.data.getSsboSet().layout()).append("\n\n");
         }
 
         if (this.data.getImageSet() != null) {
-            builder.append("#define BASE_SAMPLER_BINDING_INDEX 6\n");//TODO: DONT RANDOMLY MAKE THIS 6
+            builder.append("#define BASE_SAMPLER_BINDING_INDEX "+BASE_SAMPLER_BINDING_INDEX+"\n");
             builder.append(this.data.getImageSet().layout()).append("\n\n");
         }
 

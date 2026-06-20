@@ -59,10 +59,14 @@ public record RenderProperties(boolean isZero2One, boolean isReverseZ, boolean u
         return false;
     }
 
+    private static boolean useReverseZ() {
+        return IrisUtil.irisShaderPackEnabled()?false:DepthStencilState.DEFAULT.depthTest().equals(CompareOp.GREATER_THAN_OR_EQUAL);
+    }
+
     public static RenderProperties getRenderProperties() {
         RenderProperties properties = new RenderProperties(
                 RenderSystem.getDevice().getDeviceInfo().isZZeroToOne(),
-                DepthStencilState.DEFAULT.depthTest().equals(CompareOp.GREATER_THAN_OR_EQUAL),
+                useReverseZ(),
                 false);
 
         if (IrisUtil.IRIS_INSTALLED && IrisUtil.SHADER_SUPPORT) {

@@ -6,8 +6,10 @@ import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.util.IrisUtil;
 import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;
 import net.caffeinemc.mods.sodium.client.util.FogStorage;
+import net.caffeinemc.mods.sodium.client.util.GameRendererStorage;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.chunk.ChunkSectionsToRender;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -24,11 +26,13 @@ import static org.lwjgl.opengl.GL11C.glViewport;
 
 @Mixin(LevelRenderer.class)
 public class MixinLevelRenderer {
-    @Shadow @Final private Minecraft minecraft;
 
-    @Inject(method = "renderLevel", at = @At("HEAD"), order = 100)
-    private void voxy$injectIrisCompat(
-            GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker, boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix, GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky, ChunkSectionsToRender chunkSectionsToRender, CallbackInfo ci) {
+    @Shadow
+    @Final
+    private GameRenderer gameRenderer;
+
+    @Inject(method = "render", at = @At("HEAD"), order = 100)
+    private void voxy$injectIrisCompat(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker, boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix, GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky, CallbackInfo ci) {
         if (IrisUtil.irisShaderPackEnabled()) {
             var renderer = IVoxyRenderSystemHolder.getNullableHolder();
             if (renderer != null) {
@@ -36,7 +40,7 @@ public class MixinLevelRenderer {
                 glViewport(0,0, Minecraft.getInstance().gameRenderer.mainRenderTarget().width, Minecraft.getInstance().gameRenderer.mainRenderTarget().height);
 
                 var pos = cameraState.pos;
-                IrisUtil.CAPTURED_VIEWPORT_PARAMETERS = new IrisUtil.CapturedViewportParameters(new ChunkRenderMatrices(cameraState.projectionMatrix, cameraState.viewRotationMatrix), ((FogStorage) this.minecraft.gameRenderer).sodium$getFogParameters(), Minecraft.getInstance().gameRenderer.mainRenderTarget().width, Minecraft.getInstance().gameRenderer.mainRenderTarget().height, pos.x, pos.y, pos.z);
+                IrisUtil.CAPTURED_VIEWPORT_PARAMETERS = new IrisUtil.CapturedViewportParameters(new ChunkRenderMatrices(cameraState.projectionMatrix, cameraState.viewRotationMatrix), ((GameRendererStorage)this.gameRenderer).sodium$getFogParameters(), Minecraft.getInstance().gameRenderer.mainRenderTarget().width, Minecraft.getInstance().gameRenderer.mainRenderTarget().height, pos.x, pos.y, pos.z);
             }
         }
     }
