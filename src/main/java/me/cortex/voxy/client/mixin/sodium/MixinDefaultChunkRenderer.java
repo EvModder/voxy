@@ -2,6 +2,7 @@ package me.cortex.voxy.client.mixin.sodium;
 
 import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.opengl.GlRenderPass;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.opengl.GlTextureView;
@@ -41,7 +42,7 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
 
 
     @Inject(method = "render", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderPass;bindTexture(Ljava/lang/String;Lcom/mojang/blaze3d/textures/GpuTextureView;Lcom/mojang/blaze3d/textures/GpuSampler;)V", shift = At.Shift.AFTER, ordinal = 1))
-    private void voxy$forceRenderSomething(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters fogParameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBuffer uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci, @Local RenderPass pass) {
+    private void voxy$forceRenderSomething(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci, @Local RenderPass pass) {
         if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {
             ((GlCommandEncoder)((CommandEncoderAccessor)RenderSystem.getDevice().createCommandEncoder()).sodium$getBackend()).trySetup((GlRenderPass) ((RenderPassAccessor) pass).getBackend(), Collections.emptyList());
         }
@@ -59,8 +60,8 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
     }*/
 
     @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/ShaderChunkRenderer;end(Lnet/caffeinemc/mods/sodium/client/render/chunk/terrain/TerrainRenderPass;)V", shift = At.Shift.BEFORE))
-    private void voxy$injectRender(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters fogParameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBuffer uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
-        this.doRender(matrices, renderPass, camera, fogParameters);
+    private void voxy$injectRender(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
+        this.doRender(matrices, renderPass, camera, parameters);
     }
 
     @Unique
