@@ -112,14 +112,6 @@ public class ColumnStreamedBoundStore implements IBoundStore {
         return Math.abs(dy) < d;
     }
 
-    private static boolean testXZPos(long bpos, float fx, float fz, int cx, int cy, float d2) {
-        int rx =  cx*16-((int)bpos);
-        int rz =  cy*16-((int)(bpos>>32));
-        float dx = (float)nearestToZero(rx - 1, rx + 17) - fx;
-        float dz = (float)nearestToZero(rz - 1, rz + 17) - fz;
-        return dx * dx + dz * dz < d2;
-    }
-
     private static int nearestToZero(int min, int max) {
         int clamped = 0;
         if (min > 0) {
