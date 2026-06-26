@@ -65,8 +65,10 @@ public class VoxyConfig {
                 } catch (JsonParseException e) {
                     Logger.error("Could not parse config", e);
                 }
+                Logger.info("Error during config loading, creating new");
+            } else {
+                Logger.info("Config file doesnt exist, creating new");
             }
-            Logger.info("Error during config loading, creating new");
             var config = new VoxyConfig();
             config.save();
             return config;

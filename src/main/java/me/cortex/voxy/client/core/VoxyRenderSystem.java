@@ -12,6 +12,7 @@ import me.cortex.voxy.client.core.rendering.RenderDistanceTracker;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.ViewportSelector;
 import me.cortex.voxy.client.core.rendering.bounding.BoundRenderer;
+import me.cortex.voxy.client.core.rendering.bounding.ColumnStreamedBoundStore;
 import me.cortex.voxy.client.core.rendering.bounding.StreamedBoundStore;
 import me.cortex.voxy.client.core.rendering.building.RenderGenerationService;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
@@ -34,6 +35,7 @@ import me.cortex.voxy.commonImpl.VoxyCommon;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.lwjgl.opengl.GL11;
@@ -64,6 +66,7 @@ public class VoxyRenderSystem {
     private final RenderDistanceTracker renderDistanceTracker;
     private final BoundRenderer boundOutlineRenderer;
     public final StreamedBoundStore visbleSectionStream = new StreamedBoundStore();
+    private @Nullable ColumnStreamedBoundStore columnStreamedBoundStore;//Only used when FREX is enabled
 
     private final ViewportSelector<?> viewportSelector;
 
@@ -269,7 +272,16 @@ public class VoxyRenderSystem {
 
         TimingStatistics.E.start();
         if ((!VoxyClient.disableSodiumChunkRender())&&!IrisUtil.irisShadowActive()) {
-            this.boundOutlineRenderer.render(viewport, this.visbleSectionStream);
+            if (VoxyClient.isFrexActive()!=(this.columnStreamedBoundStore!=null)) {
+                if (this.columnStreamedBoundStore == null) {
+                    this.columnStreamedBoundStore = new ColumnStreamedBoundStore();
+                } else {
+                    this.columnStreamedBoundStore.free();
+                    this.columnStreamedBoundStore = null;
+                }
+            }
+            //If the bound renderer exists, it means we must be in FREX mode
+            this.boundOutlineRenderer.render(viewport, this.columnStreamedBoundStore==null?this.visbleSectionStream:this.columnStreamedBoundStore);
         } else {
             viewport.depthBoundingBuffer.clear(this.properties.inverseClearDepth());
         }
@@ -522,6 +534,10 @@ public class VoxyRenderSystem {
 
             this.boundOutlineRenderer.free();
             this.visbleSectionStream.free();
+            if (this.columnStreamedBoundStore != null) {
+                this.columnStreamedBoundStore.free();
+                this.columnStreamedBoundStore = null;
+            }
 
             this.viewportSelector.free();
         } catch (Exception e) {Logger.error("Error shutting down renderer components", e);}
