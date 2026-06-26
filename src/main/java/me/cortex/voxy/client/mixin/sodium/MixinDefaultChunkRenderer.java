@@ -33,6 +33,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Collections;
+import java.util.Optional;
+import java.util.OptionalDouble;
 
 @Mixin(value = DefaultChunkRenderer.class, remap = false)
 public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
@@ -42,12 +44,24 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
     }
 
 
+    /*
     @Inject(method = "render", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderPass;bindTexture(Ljava/lang/String;Lcom/mojang/blaze3d/textures/GpuTextureView;Lcom/mojang/blaze3d/textures/GpuSampler;)V", shift = At.Shift.AFTER, ordinal = 1))
     private void voxy$forceRenderSomething(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci, @Local RenderPass pass) {
         if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {
+            ((GlCommandEncoderAccessor)(GlCommandEncoder)((CommandEncoderAccessor)RenderSystem.getDevice().createCommandEncoder()).sodium$getBackend()).sodium$setLastProgram(null);
             ((GlCommandEncoder)((CommandEncoderAccessor)RenderSystem.getDevice().createCommandEncoder()).sodium$getBackend()).trySetup((GlRenderPass) ((RenderPassAccessor) pass).getBackend(), Collections.emptyList());
         }
+    }*/
+    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/ShaderChunkRenderer;end(Lnet/caffeinemc/mods/sodium/client/render/chunk/terrain/TerrainRenderPass;)V", shift = At.Shift.BEFORE, ordinal = 0), order = 999)
+    private void voxy$forceRenderSomething(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
+        if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {
+            try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Terrain", renderPass.getTarget().getColorTextureView(), Optional.empty(), renderPass.getTarget().getDepthTextureView(), OptionalDouble.empty())) {
+                pass.setPipeline(this.activeProgram);
+                ((GlCommandEncoder) ((CommandEncoderAccessor) RenderSystem.getDevice().createCommandEncoder()).sodium$getBackend()).trySetup((GlRenderPass) ((RenderPassAccessor) pass).getBackend(), Collections.emptyList());
+            }
+        }
     }
+
 
     /*
     @Inject(method = "render", at = @At(value = "HEAD"), cancellable = true)
