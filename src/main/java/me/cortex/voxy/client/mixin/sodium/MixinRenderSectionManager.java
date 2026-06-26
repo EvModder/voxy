@@ -43,12 +43,13 @@ public class MixinRenderSectionManager {
 
     @Inject(method = "<init>", at = @At("TAIL"))
     private void voxy$resetChunkTracker(ClientLevel level, int renderDistance, SortBehavior sortBehavior, CallbackInfo ci) {
+        /*
         if (level != null) {
             var system = IVoxyRenderSystemHolder.getNullable();
             if (system != null) {
                 system.chunkBoundRenderer.reset();
             }
-        }
+        }*/
         this.bottomSectionY = this.level.getMinY()>>4;
     }
 
@@ -136,6 +137,7 @@ public class MixinRenderSectionManager {
             }
         }
 
+        /*
         //Do some very cheeky stuff for MiB
         if (VoxyCommon.IS_MINE_IN_ABYSS) {
             int sector = (x+512)>>10;
@@ -149,78 +151,8 @@ public class MixinRenderSectionManager {
             vrs.chunkBoundRenderer.removeSection(pos);
         } else {//Add
             vrs.chunkBoundRenderer.addSection(pos);
-        }
+        }*/
 
         return changes;
     }
-
-    /*
-    @Redirect(method = "updateSectionInfo", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSection;setInfo(Lnet/caffeinemc/mods/sodium/client/render/chunk/data/BuiltSectionInfo;)Z"))
-    private boolean voxy$updateOnUpload(RenderSection instance, BuiltSectionInfo info) {
-        boolean wasBuilt = instance.getFlags()!=0;
-        int flags = instance.getFlags();
-        if (!instance.setInfo(info)) {
-            return false;
-        }
-        if (wasBuilt == (instance.getFlags()!=0)) {//Only want to do stuff on change
-            return true;
-        }
-
-        flags |= instance.getFlags();
-        if (flags == 0)//Only process things with stuff
-            return true;
-
-        VoxyRenderSystem system = ((IGetVoxyRenderSystem)(this.level.levelRenderer)).voxy$getRenderSystem();
-        if (system == null) {
-            return true;
-        }
-        int x = instance.getChunkX(), y = instance.getChunkY(), z = instance.getChunkZ();
-
-        if (wasBuilt && VoxyConfig.CONFIG.ingestEnabled) {
-            var tracker = ((AccessorChunkTracker)ChunkTrackerHolder.get(this.level)).getChunkStatus();
-            //in theory the cache value could be wrong but is so soso unlikely and at worst means we either duplicate ingest a chunk
-            // which... could be bad ;-; or we dont ingest atall which is ok!
-            long key = ChunkPos.pack(x, z);
-            if (key != this.cachedChunkPos) {
-                this.cachedChunkPos = key;
-                this.cachedChunkStatus = tracker.getOrDefault(key, 0);
-            }
-            if (this.cachedChunkStatus == 3) {//If this chunk still has surrounding chunks
-                var cccm = this.level.getChunkSource();
-                //var chunk = ((ICheekyClientChunkCache)cccm).voxy$cheekyGetChunk(x, z);
-                //Dont thinks need to use cheekyGetChunk here as thats handled by the inject into head of onChunkRemoved
-                // but only ingest if the chunkstatus is full and exists
-                var chunk = cccm.getChunk(x, z, ChunkStatus.FULL, false);
-                if (chunk != null) {
-                    var section = chunk.getSection(y - this.bottomSectionY);
-                    var lp = this.level.getLightEngine();
-
-                    var csp = SectionPos.of(x, y, z);
-                    var blp = lp.getLayerListener(LightLayer.BLOCK).getDataLayerData(csp);
-                    var slp = lp.getLayerListener(LightLayer.SKY).getDataLayerData(csp);
-
-                    //Note: we dont do this check and just blindly ingest, it shouldbe ok :tm:
-                    //if (blp != null || slp != null)
-                        VoxelIngestService.rawIngest(system.getEngine(), section, x, y, z, blp == null ? null : blp.copy(), slp == null ? null : slp.copy());
-                }
-            }
-        }
-
-        //Do some very cheeky stuff for MiB
-        if (VoxyCommon.IS_MINE_IN_ABYSS) {
-            int sector = (x+512)>>10;
-            x-=sector<<10;
-            y+=16+(256-32-sector*30);
-        }
-        long pos = SectionPos.asLong(x,y,z);
-        if (wasBuilt) {//Remove
-            //TODO: on chunk remove do ingest if is surrounded by built chunks (or when the tracker says is ok)
-
-            system.chunkBoundRenderer.removeSection(pos);
-        } else {//Add
-            system.chunkBoundRenderer.addSection(pos);
-        }
-        return true;
-    }
-         */
 }
