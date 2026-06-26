@@ -28,13 +28,13 @@ import static org.lwjgl.opengl.GL42.glDrawElementsInstancedBaseInstance;
 
 //This is a render subsystem, its very simple in what it does
 // it renders an AABB around loaded chunks, thats it
-public class OutlineBoundRenderer {
+public class BoundRenderer {
     private final GlBuffer uniformBuffer = new GlBuffer(128);
     private final Shader rasterShader;
     private final RenderProperties properties;
 
     private final AbstractRenderPipeline pipeline;
-    public OutlineBoundRenderer(AbstractRenderPipeline pipeline) {
+    public BoundRenderer(AbstractRenderPipeline pipeline) {
         this.properties = pipeline.properties;
 
         String vert = ShaderLoader.parse("voxy:chunkoutline/outline.vsh");
