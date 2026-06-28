@@ -29,8 +29,8 @@ repositories {
     exclusiveContent {
         forRepository {
             maven {
-                name "caffeinemcRepository"
-                url "https://maven.caffeinemc.net/releases"
+                name = "caffeinemcRepository"
+                url = "https://maven.caffeinemc.net/releases"
             }
         }
         filter {
@@ -83,34 +83,67 @@ def gitCommitHash = { ->
 
 def buildtime = {System.currentTimeSeconds()}
 
-processResources {
-    def time = buildtime()
-    def hash = gitCommitHash()
-    def version = project.version
-
-    StringBuilder sodium_versions_builder = new StringBuilder("[");
-    for (String ver : project.properties.getOrDefault("sodium_extra_allows","").split(" ")) {
-        if (!ver.isBlank()) {
-            sodium_versions_builder.append("\"=").append(ver).append("\", ");
-        }
-    }
-    String current_sodium_version;
-    if (project.hasProperty("sodium_version_modrinth")) {
-        current_sodium_version = project.properties.sodium_version_modrinth.split("-")[1];
+def findSodiumVersion() {
+    var sodium_entry = (Map.Entry<String,String>)project.properties.find {it.key.contains("sodium_version")}
+    var props = sodium_entry.key.split("\\.");
+    var key = props.last();
+    props = props[0..props.size()-1];
+    String version_str;
+    boolean modrinth_version = key.endsWith("_modrinth");
+    if (modrinth_version) {
+        version_str = (sodium_entry.value=~/[^-]*-([^-]*-?[^-]*)-.*/)[0][1];
     } else {
-        current_sodium_version = project.properties.sodium_version.split("-")[0];
+        version_str = sodium_entry.value.split("\\+")[0];
     }
-    //sodium_versions_builder.append("\"=").append(current_sodium_version).append("\"").append(", ");
-    sodium_versions_builder.append("\">=").append(current_sodium_version).append("- <=").append(current_sodium_version).append("\"")
-    sodium_versions_builder.append("]");
-    var sodium_versions = sodium_versions_builder.toString();
+    return [props, modrinth_version, sodium_entry.value, version_str];
+}
 
-    var allowed_mc_version = project.properties.minecraft_version.split("-")[0];
-    allowed_mc_version = "[\">="+allowed_mc_version+"- <=" + allowed_mc_version + "\", \"~"+allowed_mc_version+"\"]";
+processResources {
+    String sodium_versions;
+    {
+        StringBuilder sodium_versions_builder = new StringBuilder("[");
+        for (String ver : project.properties.getOrDefault("sodium_extra_allows", "").split(" ")) {
+            if (!ver.isBlank()) {
+                sodium_versions_builder.append("\"=").append(ver).append("\", ");
+            }
+        }
 
-    inputs.properties("version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version)
+        var (props, _, _2, sodium_version) = findSodiumVersion();
+        var expectExact = props.contains("exact");
+
+        if (expectExact) {
+            sodium_versions_builder.append("\"=").append(sodium_version).append("\"");
+        } else {
+            sodium_version = sodium_version.split("-")[0]
+            sodium_versions_builder.append("\">=").append(sodium_version).append("- <=").append(sodium_version).append("\"")
+        }
+        sodium_versions_builder.append("]");
+        sodium_versions = sodium_versions_builder.toString();
+    }
+    String allowed_mc_version;
+    {
+        allowed_mc_version = project.properties.minecraft_version.split("-")[0];
+        allowed_mc_version = "[\">=" + allowed_mc_version + "- <=" + allowed_mc_version + "\", \"~" + allowed_mc_version + "\"]";
+    }
+
+    var time = buildtime()
+    var hash = gitCommitHash()
+    var version = project.version
+
+    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version]
+
+    for (var prop : props) {
+        String value = prop.value;
+        if (!(value==~/^ *((['"\[{].*)|([0-9]*$))/)) {
+            value = "\"$value\"";
+        }
+        props[prop.key] = value
+    }
+
+    inputs.properties(props);
     filesMatching("fabric.mod.json") {
-        expand "version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version
+        filter {line->line.replace("\"\${","\${").replace("}\"", "}")};
+        expand(props);
     }
 }
 
@@ -181,12 +214,16 @@ dependencies {
     runtimeOnlyMsk(fabricApi.module("fabric-resource-loader-v0", project.fabric_api_version))
     runtimeOnlyMsk(fabricApi.module("fabric-command-api-v2", project.fabric_api_version))
 
-    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}";
 
-    if (project.hasProperty("sodium_version_modrinth")) {
-        implementation "maven.modrinth:sodium:${project.sodium_version_modrinth}"
-    } else {
-        implementation "net.caffeinemc:sodium-fabric:${project.sodium_version}"
+
+    {
+        var (_, mr, ver, _2) = findSodiumVersion()
+        if (mr) {
+            implementation "maven.modrinth:sodium:${ver}"
+        } else {
+            implementation "net.caffeinemc:sodium-fabric:${ver}"
+        }
     }
 
     //implementation("maven.modrinth:lithium:mc26.1.2-0.24.2-fabric")
