@@ -102,7 +102,9 @@ processResources {
     String sodium_versions;
     {
         StringBuilder sodium_versions_builder = new StringBuilder("[");
-        for (String ver : project.properties.getOrDefault("sodium_extra_allows", "").split(" ")) {
+        var vers = [*project.properties.getOrDefault("sodium_extra_allows", "").split(" ")];
+        vers.add("0.0.0");//Sodium dummy provider 0.0.0
+        for (String ver : vers) {
             if (!ver.isBlank()) {
                 sodium_versions_builder.append("\"=").append(ver).append("\", ");
             }
@@ -215,6 +217,26 @@ dependencies {
     runtimeOnlyMsk(fabricApi.module("fabric-command-api-v2", project.fabric_api_version))
 
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}";
+
+    repositories {
+        exclusiveContent {
+            forRepository {
+                flatDir {
+                    dir(projectDir)
+                }
+            }
+            filter {
+                includeVersion("me.cortex", "dummyprovider", "0.0.0")
+            }
+        }
+    }
+
+    include(implementation("me.cortex:dummyprovider:0.0.0") {
+        /*
+        with {
+            it.addArtifact()
+        }*/
+    });
 
 
     {
