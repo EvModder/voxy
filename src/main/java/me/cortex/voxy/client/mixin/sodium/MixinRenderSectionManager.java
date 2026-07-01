@@ -99,15 +99,15 @@ public class MixinRenderSectionManager {
 
     @Redirect(method = "updateSectionInfo", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/RenderSection;setInfo(Lnet/caffeinemc/mods/sodium/client/render/chunk/data/BuiltSectionInfo;)I"))
     private int voxy$updateOnUpload(RenderSection instance, BuiltSectionInfo info) {
-        boolean neededRender = instance.needsRender();
+        boolean isInvisible = instance.isInvisible();
         int changes = instance.setInfo(info);
         VoxyRenderSystem vrs = null;
-        if (neededRender == instance.needsRender() || changes == 0 || (vrs = IVoxyRenderSystemHolder.getNullable()) == null) {
+        if (isInvisible == instance.isInvisible() || changes == 0 || (vrs = IVoxyRenderSystemHolder.getNullable()) == null) {
             return changes;
         }
         int x = instance.getChunkX(), y = instance.getChunkY(), z = instance.getChunkZ();
 
-        if (neededRender && VoxyConfig.CONFIG.ingestEnabled) {
+        if (!isInvisible && VoxyConfig.CONFIG.ingestEnabled) {
             var tracker = ((AccessorChunkTracker) ChunkTrackerHolder.get(this.level)).getChunkStatus();
             //in theory the cache value could be wrong but is so soso unlikely and at worst means we either duplicate ingest a chunk
             // which... could be bad ;-; or we dont ingest atall which is ok!
