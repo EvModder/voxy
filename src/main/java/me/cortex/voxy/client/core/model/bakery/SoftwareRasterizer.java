@@ -14,7 +14,7 @@ import java.util.Arrays;
 import java.util.Random;
 
 public class SoftwareRasterizer {
-    private static final int INTEGER_BITS = 8;//+-256
+    private static final int INTEGER_BITS = 9;//+-512
     private static final int TOTAL_INTEGER_BITS = INTEGER_BITS+1;
     private static final int FIXED_POINT_BITS = 32-TOTAL_INTEGER_BITS;
     private static final long FIXED_POINT_BIT_SCALE = (1<<FIXED_POINT_BITS)-1;
