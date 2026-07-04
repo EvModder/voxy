@@ -168,12 +168,20 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
 
     @Override
     protected void finish(Viewport<?> viewport, int sourceDepthTexture, int outputFramebuffer, int srcWidth, int srcHeight) {
-        if (this.data.renderToVanillaDepth && srcWidth == viewport.width  && srcHeight == viewport.height) {//We can only depthblit out if destination size is the same
-            glColorMask(false, false, false, false);
-            AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
-                    this.fbTranslucent.getDepthTex().id, outputFramebuffer,
-                    viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
-            glColorMask(true, true, true, true);
+        if (this.data.renderToVanillaDepth) {
+            //We can only depthblit out if destination size is the same, if they arnt, force them tobe
+            boolean mustFiddledViewport = srcWidth != viewport.width  || srcHeight != viewport.height;
+            if (this.data.useViewportDims||!mustFiddledViewport) {
+                glColorMask(false, false, false, false);
+                if (mustFiddledViewport)
+                    glViewport(0, 0, viewport.width, viewport.height);
+                AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                        this.fbTranslucent.getDepthTex().id, outputFramebuffer,
+                        viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                if (mustFiddledViewport)
+                    glViewport(0, 0, srcWidth, srcHeight);
+                glColorMask(true, true, true, true);
+            }
         } else {
             // normally disabled by AbstractRenderPipeline but since we are skipping it we do it here
             glDisable(GL_STENCIL_TEST);
