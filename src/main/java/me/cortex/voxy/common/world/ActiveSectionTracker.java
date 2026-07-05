@@ -208,15 +208,29 @@ public class ActiveSectionTracker {
         if (this.engine != null) this.engine.lastActiveTime = System.currentTimeMillis();
         if (section.shouldSave()&&this.engine!=null) {
             if (section.tryAcquire()) {
+                VarHandle.loadLoadFence();
                 if (section.shouldSave()) {//If we should try enqueue
-                    if (!this.engine.saveSection(section, true, true)) {
+                    if (!this.engine.saveSection(section, false, true)) {
                         //we didnt enqueue the section in the save queue so we must unload it manually
+                        Logger.info("section raced to into save queue, we lost");
                         section.release(false, hints);
+                    } else {
+                        //section is queued
+                        return;//We just return
                     }
                 } else {
+                    Logger.warn("section raced to save queue, we lost");
                     section.release(false, hints);//Special release
                 }
+            } else {
+                if (section.shouldSave()) {
+                    //This is bad
+                    Logger.error("failed to acquire section, but we need to save, this is really bad");
+                } else {
+                    Logger.info("raced section");
+                }
             }
+            return;//If we reach here, we need to just return, unload pipeline will be taken care of elsewhere
         }
 
         if (section.getRefCount() != 0) {
@@ -227,6 +241,10 @@ public class ActiveSectionTracker {
         WorldSection sec = null;
         final var lock = this.locks[index];
         long stamp = lock.writeLock();
+        if (section.getRefCount() != 0) {
+            lock.unlockWrite(stamp);
+            return;
+        }
         boolean shouldRetryExit = false;
         {
             VarHandle.loadLoadFence();
