@@ -213,14 +213,14 @@ public class ActiveSectionTracker {
                     if (!this.engine.saveSection(section, false, true)) {
                         //we didnt enqueue the section in the save queue so we must unload it manually
                         Logger.info("section raced to into save queue, we lost");
-                        section.release(false, hints);
+                        section.release(true, hints);//We need to try unload cause else we may loose state
                     } else {
-                        //section is queued
+                        //section is queued, and we gave it the acquired section, so we can just return
                         return;//We just return
                     }
                 } else {
                     Logger.warn("section raced to save queue, we lost");
-                    section.release(false, hints);//Special release
+                    section.release(true, hints);//Unload cause we need to retry the whole thing again
                 }
             } else {
                 if (section.shouldSave()) {
@@ -253,11 +253,14 @@ public class ActiveSectionTracker {
                     if (!this.engine.saveSection(section, true, true)) {//not allowed to block as we are in a lock
                         //We didnt enqueue the save here, so we must unload
                         // but unload in a recursive
-                        VarHandle.fullFence();
-                        shouldRetryExit |= section.getRefCount()!=1;//if we arnt the only ref
-                        VarHandle.fullFence();
-                        shouldRetryExit |= section.isDirty;//or if the section is now dirty, note this must go AFTER the ref check, since you can only mark live sections as dirty
-                        section.release(false, hints);//Special
+                        //VarHandle.fullFence();
+                        //shouldRetryExit |= section.getRefCount()!=1;//if we arnt the only ref
+                        //VarHandle.fullFence();
+                        //shouldRetryExit |= section.isDirty;//or if the section is now dirty, note this must go AFTER the ref check, since you can only mark live sections as dirty
+
+                        shouldRetryExit |= true;//Always force retry when/if we hit this case
+                        section.release(false, hints);//Special, we cannot unload here else we deadlock
+                        //we can do a no-unload since we are guarenteed to retry
                     }
 
 

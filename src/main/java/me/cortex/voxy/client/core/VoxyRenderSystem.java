@@ -253,6 +253,9 @@ public class VoxyRenderSystem {
             oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
         }
 
+        GlStateManager._enableDepthTest();
+        GlStateManager._depthFunc(this.properties.closerEqualDepthCompare());
+        GlStateManager._depthMask(true);
 
         int oldFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
 
