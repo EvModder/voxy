@@ -1,35 +1,11 @@
 package me.cortex.voxy.client.core.rendering.bounding;
 
-import me.cortex.voxy.client.core.AbstractRenderPipeline;
-import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gl.GlBuffer;
-import me.cortex.voxy.client.core.gl.GlVertexArray;
-import me.cortex.voxy.client.core.gl.shader.AutoBindingShader;
-import me.cortex.voxy.client.core.gl.shader.Shader;
-import me.cortex.voxy.client.core.gl.shader.ShaderLoader;
-import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import me.cortex.voxy.client.core.rendering.Viewport;
-import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
-import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.util.UnsafeUtil;
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.SectionPos;
-import org.joml.Matrix4f;
-import org.joml.Vector3f;
-import org.joml.Vector3i;
-import org.lwjgl.system.MemoryUtil;
 
 import java.util.Arrays;
-
-import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
-import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
-import static org.lwjgl.opengl.GL15.GL_ELEMENT_ARRAY_BUFFER;
-import static org.lwjgl.opengl.GL15.glBindBuffer;
-import static org.lwjgl.opengl.GL30.glBindVertexArray;
-import static org.lwjgl.opengl.GL30C.*;
-import static org.lwjgl.opengl.GL31.glDrawElementsInstanced;
-import static org.lwjgl.opengl.GL42.glDrawElementsInstancedBaseInstance;
 
 //This is a render subsystem, its very simple in what it does
 // it renders an AABB around loaded chunks, thats it
@@ -62,6 +38,7 @@ public final class StreamedBoundStore implements IBoundStore {
     }
 
     public void put(long pos) {
+        pos = IBoundStore.transformBeforeStore(pos);
         this.visibleSections[this.count++] = (int)(pos&0xFFFFFFFFL);
         this.visibleSections[this.count++] = (int)((pos>>>32)&0xFFFFFFFFL);
         if (this.count >= this.visibleSections.length-2) {

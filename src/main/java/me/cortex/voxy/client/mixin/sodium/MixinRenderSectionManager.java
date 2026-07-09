@@ -1,18 +1,12 @@
 package me.cortex.voxy.client.mixin.sodium;
 
-import com.llamalad7.mixinextras.sugar.Local;
 import me.cortex.voxy.client.ICheekyClientChunkCache;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
-import me.cortex.voxy.client.iris.IGetIrisVoxyPipelineData;
-import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.world.service.VoxelIngestService;
-import me.cortex.voxy.commonImpl.VoxyCommon;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
-import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionFlags;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
-import net.caffeinemc.mods.sodium.client.render.chunk.compile.executor.ChunkBuilder;
 import net.caffeinemc.mods.sodium.client.render.chunk.data.BuiltSectionInfo;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
 import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.SortBehavior;
@@ -30,7 +24,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(value = RenderSectionManager.class, remap = false)
 public class MixinRenderSectionManager {
@@ -39,17 +32,8 @@ public class MixinRenderSectionManager {
 
     @Shadow @Final private ClientLevel level;
 
-    @Shadow @Final private ChunkBuilder builder;
-
     @Inject(method = "<init>", at = @At("TAIL"))
     private void voxy$resetChunkTracker(ClientLevel level, int renderDistance, SortBehavior sortBehavior, CallbackInfo ci) {
-        /*
-        if (level != null) {
-            var system = IVoxyRenderSystemHolder.getNullable();
-            if (system != null) {
-                system.chunkBoundRenderer.reset();
-            }
-        }*/
         this.bottomSectionY = this.level.getMinY()>>4;
     }
 
@@ -81,16 +65,6 @@ public class MixinRenderSectionManager {
         }
     }
 
-    /*
-    @Inject(method = "onChunkRemoved", at = @At("HEAD"))
-    private void voxy$trackChunkRemove(int x, int z, CallbackInfo ci) {
-        if (this.level.worldRenderer != null) {
-            var system = ((IGetVoxyRenderSystem)(this.level.worldRenderer)).getVoxyRenderSystem();
-            if (system != null) {
-                system.chunkBoundRenderer.removeSection(ChunkPos.toLong(x, z));
-            }
-        }
-    }*/
 
     @Unique private long cachedChunkPos = -1;
     @Unique private int cachedChunkStatus;
@@ -136,22 +110,6 @@ public class MixinRenderSectionManager {
                 }
             }
         }
-
-        /*
-        //Do some very cheeky stuff for MiB
-        if (VoxyCommon.IS_MINE_IN_ABYSS) {
-            int sector = (x+512)>>10;
-            x-=sector<<10;
-            y+=16+(256-32-sector*30);
-        }
-        long pos = SectionPos.asLong(x,y,z);
-        if (neededRender) {//Remove
-            //TODO: on chunk remove do ingest if is surrounded by built chunks (or when the tracker says is ok)
-
-            vrs.chunkBoundRenderer.removeSection(pos);
-        } else {//Add
-            vrs.chunkBoundRenderer.addSection(pos);
-        }*/
 
         return changes;
     }

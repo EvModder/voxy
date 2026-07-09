@@ -3,10 +3,7 @@ package me.cortex.voxy.client.core.rendering.bounding;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
-import me.cortex.voxy.client.mixin.sodium.AccessorChunkTracker;
 import me.cortex.voxy.common.util.MemoryBuffer;
-import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
-import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTracker;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.SectionPos;
@@ -45,6 +42,7 @@ public class ColumnStreamedBoundStore implements IBoundStore {
     }
 
     private static void putPos(long ptr, long pos) {
+        pos = IBoundStore.transformBeforeStore(pos);
         MemoryUtil.memPutInt(ptr, (int)(pos&0xFFFFFFFFL)); ptr += 4;
         MemoryUtil.memPutInt(ptr, (int)((pos>>>32)&0xFFFFFFFFL));
     }
@@ -61,13 +59,8 @@ public class ColumnStreamedBoundStore implements IBoundStore {
         }
         //WTAF IS THIS HORRIFIC CODE, _screams_ this is so so bad, and jank and slow and orrible but
         // headache hard think
-        float d2 = searchDistance*searchDistance;
-        int bx = (int)Math.floor(viewport.cameraX);
         int by = (int)Math.floor(viewport.cameraY);
-        int bz = (int)Math.floor(viewport.cameraZ);
         float fy = (float) (viewport.cameraY - (int)viewport.cameraY);
-        float fx = (float) (viewport.cameraX - (int)viewport.cameraX);
-        float fz = (float) (viewport.cameraZ - (int)viewport.cameraZ);
 
 
         //Inclusive
