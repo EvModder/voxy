@@ -8,6 +8,7 @@ import com.mojang.blaze3d.opengl.GlTextureView;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuSampler;
+import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.util.IrisUtil;
@@ -39,36 +40,15 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
         super(vertexType);
     }
 
-
-    /*
-    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderPass;bindTexture(Ljava/lang/String;Lcom/mojang/blaze3d/textures/GpuTextureView;Lcom/mojang/blaze3d/textures/GpuSampler;)V", shift = At.Shift.AFTER, ordinal = 1))
-    private void voxy$forceRenderSomething(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci, @Local RenderPass pass) {
-        if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {
-            ((GlCommandEncoderAccessor)(GlCommandEncoder)((CommandEncoderAccessor)RenderSystem.getDevice().createCommandEncoder()).sodium$getBackend()).sodium$setLastProgram(null);
-            ((GlCommandEncoder)((CommandEncoderAccessor)RenderSystem.getDevice().createCommandEncoder()).sodium$getBackend()).trySetup((GlRenderPass) ((RenderPassAccessor) pass).getBackend(), Collections.emptyList());
-        }
-    }*/
-    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/ShaderChunkRenderer;end(Lnet/caffeinemc/mods/sodium/client/render/chunk/terrain/TerrainRenderPass;)V", shift = At.Shift.BEFORE, ordinal = 0), order = 999)
-    private void voxy$forceRenderSomething(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
-        if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {
-            try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Terrain", renderPass.getTarget().getColorTextureView(), Optional.empty(), renderPass.getTarget().getDepthTextureView(), OptionalDouble.empty())) {
-                pass.setPipeline(this.activeProgram);
-                ((GlCommandEncoder) ((CommandEncoderAccessor) RenderSystem.getDevice().createCommandEncoder()).sodium$getBackend()).trySetup((GlRenderPass) ((RenderPassAccessor) pass).getBackend(), Collections.emptyList());
-            }
-        }
-    }
-
-
-    /*
     @Inject(method = "render", at = @At(value = "HEAD"), cancellable = true)
-    private void voxy$cancelThingie(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters fogParameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBuffer uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
+    private void voxy$cancelThingie(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
         if (VoxyClient.disableSodiumChunkRender()) {
-            super.begin(renderPass, fogParameters, terrainSampler);
-            this.doRender(matrices, renderPass, camera, fogParameters);
+            super.begin(renderPass, parameters, terrainSampler);
+            this.doRender(matrices, renderPass, camera, parameters);
             super.end(renderPass);
             ci.cancel();
         }
-    }*/
+    }
 
     @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/ShaderChunkRenderer;end(Lnet/caffeinemc/mods/sodium/client/render/chunk/terrain/TerrainRenderPass;)V", shift = At.Shift.BEFORE))
     private void voxy$injectRender(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
