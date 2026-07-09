@@ -1,17 +1,12 @@
 package me.cortex.voxy.client.core.model.bakery;
 
-import me.cortex.voxy.client.core.model.ModelFactory;
-import net.caffeinemc.mods.sodium.api.util.ColorABGR;
-import net.caffeinemc.mods.sodium.api.util.ColorARGB;
 import net.caffeinemc.mods.sodium.api.util.ColorMixer;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3i;
 import org.joml.Vector4f;
-import org.lwjgl.system.MemoryUtil;
 
 import java.util.Arrays;
-import java.util.Random;
 
 public class SoftwareRasterizer {
     private static final int INTEGER_BITS = 9;//+-512

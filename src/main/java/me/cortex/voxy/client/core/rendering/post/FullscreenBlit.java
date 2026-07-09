@@ -6,7 +6,6 @@ import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
 
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL15C.GL_ELEMENT_ARRAY_BUFFER;

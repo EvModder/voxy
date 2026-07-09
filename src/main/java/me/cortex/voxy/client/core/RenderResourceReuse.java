@@ -4,19 +4,15 @@ import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.model.ModelFactory;
-import me.cortex.voxy.client.core.rendering.section.geometry.BasicSectionGeometryData;
-import me.cortex.voxy.client.core.rendering.section.geometry.IGeometryData;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.ThreadUtils;
 import me.cortex.voxy.common.util.TrackedObject;
-import me.cortex.voxy.commonImpl.VoxyCommon;
 
 import java.util.ArrayList;
 
 import static org.lwjgl.opengl.ARBSparseBuffer.GL_SPARSE_STORAGE_BIT_ARB;
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
 import static org.lwjgl.opengl.GL11C.*;
-import static org.lwjgl.opengl.GL11C.GL_NO_ERROR;
 
 //System to allow reuse/recycling of render buffer/texture allocations
 // specfically the geometry buffer and texture atlas allocation

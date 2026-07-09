@@ -44,7 +44,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteri;
-import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteriv;
 import static org.lwjgl.opengl.GL11.glGetIntegerv;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL30C.*;

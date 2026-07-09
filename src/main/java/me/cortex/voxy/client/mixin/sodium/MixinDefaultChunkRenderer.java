@@ -1,16 +1,13 @@
 package me.cortex.voxy.client.mixin.sodium;
 
-import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.opengl.GlCommandEncoder;
 import com.mojang.blaze3d.opengl.GlRenderPass;
-import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.opengl.GlTextureView;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.opengl.GlCommandEncoder;
-import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.util.IrisUtil;
@@ -24,7 +21,6 @@ import net.caffeinemc.mods.sodium.client.render.chunk.vertex.format.ChunkVertexT
 import net.caffeinemc.mods.sodium.client.render.viewport.CameraTransform;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.caffeinemc.mods.sodium.mixin.core.CommandEncoderAccessor;
-import net.caffeinemc.mods.sodium.mixin.core.GlCommandEncoderAccessor;
 import net.caffeinemc.mods.sodium.mixin.core.RenderPassAccessor;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;

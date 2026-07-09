@@ -7,12 +7,9 @@ import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import me.cortex.voxy.client.core.model.ModelStore;
 import me.cortex.voxy.client.core.rendering.Viewport;
-import me.cortex.voxy.client.core.rendering.section.geometry.BasicSectionGeometryData;
 import me.cortex.voxy.client.core.rendering.section.geometry.IGeometryData;
 import me.cortex.voxy.common.Logger;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.core.Direction;
-import net.minecraft.world.level.dimension.DimensionType;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;

@@ -3,7 +3,6 @@ package me.cortex.voxy.client.core.gl;
 import me.cortex.voxy.common.util.TrackedObject;
 
 import static org.lwjgl.opengl.GL45C.*;
-import static org.lwjgl.opengl.GL45C.glNamedFramebufferDrawBuffers;
 
 public class GlFramebuffer extends TrackedObject {
     public final int id;

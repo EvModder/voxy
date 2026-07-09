@@ -21,7 +21,6 @@ import me.cortex.voxy.client.core.util.GPUTiming;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.world.WorldEngine;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.Direction;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryUtil;
 

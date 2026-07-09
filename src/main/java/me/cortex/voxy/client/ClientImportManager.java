@@ -6,8 +6,8 @@ import me.cortex.voxy.commonImpl.importers.IDataImporter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.LerpingBossEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Mth;
 import net.minecraft.world.BossEvent;
+
 import java.util.UUID;
 
 public class ClientImportManager extends ImportManager {

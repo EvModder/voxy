@@ -1,14 +1,13 @@
 package me.cortex.voxy.client.core.model.bakery;
 
 
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import net.minecraft.client.model.geom.builders.UVPair;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.texture.MipmapStrategy;
 import net.minecraft.client.resources.model.geometry.BakedQuad;
 import org.lwjgl.system.MemoryUtil;
-
-import com.mojang.blaze3d.vertex.VertexConsumer;
 
 public final class ReuseVertexConsumer implements VertexConsumer {
     public static final int VERTEX_FORMAT_SIZE = 24;

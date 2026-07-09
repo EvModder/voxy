@@ -1,8 +1,6 @@
 package me.cortex.voxy.client.mixin.sodium;
 
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
-import me.cortex.voxy.commonImpl.VoxyCommon;
-import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
 import net.caffeinemc.mods.sodium.client.render.chunk.LocalSectionIndex;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionFlags;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.VisibleChunkCollector;

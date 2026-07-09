@@ -38,12 +38,17 @@ import static org.lwjgl.opengl.GL30C.GL_COLOR_ATTACHMENT0;
 import static org.lwjgl.opengl.GL30C.GL_DEPTH24_STENCIL8;
 import static org.lwjgl.opengl.GL30C.GL_FRAMEBUFFER;
 import static org.lwjgl.opengl.GL30C.glBindFramebuffer;
-import static org.lwjgl.opengl.GL42.GL_LEQUAL;
-import static org.lwjgl.opengl.GL42.GL_NOTEQUAL;
-import static org.lwjgl.opengl.GL42.glDepthFunc;
 import static org.lwjgl.opengl.GL42.*;
+import static org.lwjgl.opengl.GL42.GL_DEPTH_ATTACHMENT;
+import static org.lwjgl.opengl.GL42.GL_DEPTH_STENCIL;
+import static org.lwjgl.opengl.GL42.GL_NEAREST;
+import static org.lwjgl.opengl.GL42.GL_TEXTURE_MAG_FILTER;
+import static org.lwjgl.opengl.GL42.GL_TEXTURE_MIN_FILTER;
+import static org.lwjgl.opengl.GL42.glDepthFunc;
+import static org.lwjgl.opengl.GL42.glDepthMask;
+import static org.lwjgl.opengl.GL42.glUniform2f;
+import static org.lwjgl.opengl.GL42.nglUniformMatrix4fv;
 import static org.lwjgl.opengl.GL45.glClearNamedFramebufferfi;
-import static org.lwjgl.opengl.GL45.glGetNamedFramebufferAttachmentParameteri;
 import static org.lwjgl.opengl.GL45C.glBindTextureUnit;
 
 public abstract class AbstractRenderPipeline extends TrackedObject {

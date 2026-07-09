@@ -6,24 +6,18 @@ import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import org.joml.Matrix4f;
-import org.joml.Random;
 import org.lwjgl.system.MemoryStack;
 
 import java.util.List;
 
 import static org.lwjgl.opengl.ARBComputeShader.glDispatchCompute;
-import static org.lwjgl.opengl.ARBDirectStateAccess.glTextureParameteri;
 import static org.lwjgl.opengl.ARBShaderImageLoadStore.glBindImageTexture;
 import static org.lwjgl.opengl.GL11C.*;
-import static org.lwjgl.opengl.GL11C.GL_TEXTURE_WRAP_T;
 import static org.lwjgl.opengl.GL12C.GL_CLAMP_TO_EDGE;
 import static org.lwjgl.opengl.GL14C.GL_TEXTURE_COMPARE_MODE;
 import static org.lwjgl.opengl.GL15C.GL_READ_WRITE;
 import static org.lwjgl.opengl.GL20C.nglUniformMatrix4fv;
-import static org.lwjgl.opengl.GL30.GL_DEPTH_ATTACHMENT;
-import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME;
 import static org.lwjgl.opengl.GL33C.*;
-import static org.lwjgl.opengl.GL45.glGetNamedFramebufferAttachmentParameteri;
 import static org.lwjgl.opengl.GL45C.glBindTextureUnit;
 import static org.lwjgl.opengl.GL45C.glCreateSamplers;
 

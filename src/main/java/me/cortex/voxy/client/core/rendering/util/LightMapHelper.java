@@ -1,5 +1,7 @@
 package me.cortex.voxy.client.core.rendering.util;
 
+import net.minecraft.client.Minecraft;
+
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE;
 import static org.lwjgl.opengl.GL12.GL_TEXTURE_WRAP_R;
@@ -7,8 +9,6 @@ import static org.lwjgl.opengl.GL33.glBindSampler;
 import static org.lwjgl.opengl.GL33.glSamplerParameteri;
 import static org.lwjgl.opengl.GL45.glBindTextureUnit;
 import static org.lwjgl.opengl.GL45.glCreateSamplers;
-
-import net.minecraft.client.Minecraft;
 
 public class LightMapHelper {
     private static final int LM_SAMPLER;

@@ -1,7 +1,6 @@
 package me.cortex.voxy.client.core;
 
 import me.cortex.voxy.client.core.gl.GlBuffer;
-import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.model.ModelBakerySubsystem;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
