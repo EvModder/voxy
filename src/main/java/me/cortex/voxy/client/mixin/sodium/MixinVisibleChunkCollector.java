@@ -18,13 +18,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = VisibleChunkCollector.class, remap = false)
 public class MixinVisibleChunkCollector {
+    /*
     @Inject(method = "<init>", at = @At("HEAD"))
     private static void voxy$injectVisibleStreamReset(CallbackInfo ci) {
         var vrs = IVoxyRenderSystemHolder.getNullable();
         if (vrs != null) {
             vrs.visbleSectionStream.reset();
         }
-    }
+    }*/
 
     //Use redirect for performance
     @Redirect(method = "visit", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegionManager;getForChunk(III)Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegion;"), remap = false)

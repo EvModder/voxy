@@ -37,6 +37,11 @@ public final class StreamedBoundStore implements IBoundStore {
         this.didChange = true;
     }
 
+    @Override
+    public void postRender(Viewport<?> viewport) {
+        this.reset();
+    }
+
     public void put(long pos) {
         pos = IBoundStore.transformBeforeStore(pos);
         this.visibleSections[this.count++] = (int)(pos&0xFFFFFFFFL);
