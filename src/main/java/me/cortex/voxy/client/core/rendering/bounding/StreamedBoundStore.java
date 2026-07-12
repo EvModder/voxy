@@ -22,7 +22,7 @@ public final class StreamedBoundStore implements IBoundStore {
     @Override
     public void preRender(Viewport<?> viewport) {
         if (this.count == 0 || !this.didChange) return;
-        if (this.count*4>this.chunkPosBuffer.size()) {
+        if (this.count*4L>this.chunkPosBuffer.size()) {
             this.chunkPosBuffer.free();
             this.chunkPosBuffer = new GlBuffer(((long) Math.ceil(this.count*1.25))*4);
         }
@@ -35,11 +35,6 @@ public final class StreamedBoundStore implements IBoundStore {
     public void reset() {
         this.count = 0;
         this.didChange = true;
-    }
-
-    @Override
-    public void postRender(Viewport<?> viewport) {
-        this.reset();
     }
 
     public void put(long pos) {

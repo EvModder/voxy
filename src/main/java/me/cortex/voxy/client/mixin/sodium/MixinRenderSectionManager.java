@@ -4,12 +4,15 @@ import me.cortex.voxy.client.ICheekyClientChunkCache;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
+import me.cortex.voxy.client.core.util.IrisUtil;
 import me.cortex.voxy.common.world.service.VoxelIngestService;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.data.BuiltSectionInfo;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
 import net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.SortBehavior;
+import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
+import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.SectionPos;
@@ -35,6 +38,22 @@ public class MixinRenderSectionManager {
     @Inject(method = "<init>", at = @At("TAIL"))
     private void voxy$resetChunkTracker(ClientLevel level, int renderDistance, SortBehavior sortBehavior, CallbackInfo ci) {
         this.bottomSectionY = this.level.getMinY()>>4;
+    }
+
+    @Inject(method = "renderOutOfGraph", at = @At("HEAD"))
+    private void voxy$injectReset1(Viewport viewport, FogParameters fogParameters, CallbackInfo ci) {
+        var vrs = IVoxyRenderSystemHolder.getNullable();
+        if (vrs != null && !IrisUtil.irisShadowActive()) {
+            vrs.visbleSectionStream.reset();
+        }
+    }
+
+    @Inject(method = "readRenderListFromTree", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/lists/VisibleChunkCollector;<init>(Lnet/caffeinemc/mods/sodium/client/render/chunk/region/RenderRegionManager;I)V"))
+    private void voxy$injectReset2(Viewport viewport, FogParameters fogParameters, CallbackInfo ci) {
+        var vrs = IVoxyRenderSystemHolder.getNullable();
+        if (vrs != null && !IrisUtil.irisShadowActive()) {
+            vrs.visbleSectionStream.reset();
+        }
     }
 
     @Inject(method = "onChunkRemoved", at = @At("HEAD"))
