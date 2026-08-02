@@ -343,12 +343,18 @@ public class ModelFactory {
 
     private static final class ModelBakeResultUpload implements ResultUploader {
         private final MemoryBuffer model = new MemoryBuffer(MODEL_SIZE).zero();
-        private final MemoryBuffer texture = new MemoryBuffer((2L*3*computeSizeWithMips(MODEL_TEXTURE_SIZE))*4);
+        private final MemoryBuffer texture;
+        private final boolean hasMips;
 
         public int modelId = -1;
 
         public int biomeUploadIndex = -1;
         public @Nullable MemoryBuffer biomeUpload;
+
+        private ModelBakeResultUpload(boolean useMips) {
+            this.hasMips = useMips;
+            this.texture = new MemoryBuffer((2L*3*(useMips?computeSizeWithMips(MODEL_TEXTURE_SIZE):MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE))*4);
+        }
 
         public void upload(ModelStore store) {//Uploads and resets for reuse
             this.upload(store.modelBuffer, store.modelColourBuffer, store.textures);
@@ -367,7 +373,7 @@ public class ModelFactory {
             int Y = ((this.modelId>>8)&0xFF) * MODEL_TEXTURE_SIZE*2;
 
             long cAddr = this.texture.address;
-            for (int lvl = 0; lvl < LAYERS; lvl++) {
+            for (int lvl = 0; lvl < (this.hasMips?LAYERS:1); lvl++) {
                 nglTextureSubImage2D(atlas.id, lvl, X >> lvl, Y >> lvl, (MODEL_TEXTURE_SIZE*3) >> lvl, (MODEL_TEXTURE_SIZE*2) >> lvl, GL_RGBA, GL_UNSIGNED_BYTE, cAddr);
                 cAddr += (MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE*3*2*4)>>(lvl<<1);
             }
@@ -459,7 +465,7 @@ public class ModelFactory {
 
 
 
-        ModelBakeResultUpload uploadResult = new ModelBakeResultUpload();
+        ModelBakeResultUpload uploadResult = new ModelBakeResultUpload(true);
         uploadResult.modelId = modelId;
         long uploadPtr = uploadResult.model.address;
 
@@ -675,8 +681,8 @@ public class ModelFactory {
 
         //TODO callback to inject extra data into the model data
 
-
-        MipGen.putTextures(darkenedTinting, textureData, uploadResult.texture);
+        if (uploadResult.hasMips)
+            MipGen.putTextures(darkenedTinting, textureData, uploadResult.texture);
 
         //glGenerateTextureMipmap(this.textures.id);
 
