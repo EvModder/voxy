@@ -128,6 +128,7 @@ public class ModelFactory {
     private final ConcurrentLinkedDeque<ResultUploader> uploadResults = new ConcurrentLinkedDeque<>();
 
     private Object2IntMap<BlockState> customBlockStateIdMapping;
+    private final boolean rasterUV;
 
     //TODO: NOTE!!! is it worth even uploading as a 16x16 texture, since automatic lod selection... doing 8x8 textures might be perfectly ok!!!
     // this _quarters_ the memory requirements for the texture atlas!!! WHICH IS HUGE saving
@@ -136,6 +137,8 @@ public class ModelFactory {
         this.storage = storage;
         this.bakery2 = new SoftwareModelTextureBakery();
         this.bakery2.setupTexture();
+
+        this.rasterUV = false;
 
         this.metadataCache = new long[1<<16];
         this.fluidStateLUT = new int[1<<16];
@@ -224,7 +227,7 @@ public class ModelFactory {
         if (bake == null) return false;
         ColourDepthTextureData[] textureData = new ColourDepthTextureData[6];
 
-        int flags = this.bakery2.renderToOutput(bake.state, this.bakeScratchBuffer);
+        int flags = this.bakery2.renderToOutput(bake.state, this.bakeScratchBuffer, this.rasterUV);
 
 
         {//Create texture data
@@ -465,7 +468,7 @@ public class ModelFactory {
 
 
 
-        ModelBakeResultUpload uploadResult = new ModelBakeResultUpload(true);
+        ModelBakeResultUpload uploadResult = new ModelBakeResultUpload(!this.rasterUV);
         uploadResult.modelId = modelId;
         long uploadPtr = uploadResult.model.address;
 
