@@ -52,8 +52,9 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
             if (renderer != null) {
                 Viewport<?> viewport = null;
                 var target = renderPass.getTarget();
-                if (IrisUtil.irisShaderPackEnabled()) {
+                if (IrisUtil.USED_IRIS_VIEWPORT) {
                     viewport = renderer.getViewport();
+                    IrisUtil.USED_IRIS_VIEWPORT = false;
                 } else {
                     viewport = renderer.setupViewport(matrices.projection(), matrices.modelView(), fogParameters, target.width, target.height, camera.x, camera.y, camera.z);
                 }
