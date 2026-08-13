@@ -4,6 +4,7 @@
   "version": "${version}",
   "custom": {
     "commit": "${commit}",
+    "dirty": "${dirty}",
     "buildtime": "${buildtime}"
   },
   "name": "Voxy",

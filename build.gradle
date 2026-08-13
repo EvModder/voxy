@@ -3,7 +3,6 @@ plugins {
 }
 
 def includeOtherArchs = providers.gradleProperty('includeOtherArchs').getOrElse('false').toBoolean()
-def isInGHA = System.getenv("GITHUB_ACTIONS") == "true"
 def minecraftVersion = providers.gradleProperty('minecraft_version').get()
 def loaderVersion = providers.gradleProperty('loader_version').get()
 def fabricApiVersion = providers.gradleProperty('fabric_api_version').get()
@@ -88,6 +87,21 @@ def gitCommitHash = { ->
     }
 }
 
+def gitWorkingTreeDirty = { ->
+    try {
+        ExecOutput result = providers.exec {
+            commandLine = ['git', 'status', '--porcelain', '--untracked-files=normal']
+            ignoreExitValue = true
+        }
+
+        return result.getResult().get().getExitValue() == 0
+                && !result.standardOutput.asText.get().isBlank()
+    } catch (Exception e) {
+        e.printStackTrace()
+        return true
+    }
+}
+
 def buildtime = {System.currentTimeSeconds()}
 
 def sodiumVersionMatcher = sodiumDependency =~ /[^-]*-([^-]*-?[^-]*)-.*/
@@ -120,13 +134,14 @@ processResources {
 
     var time = buildtime()
     var hash = gitCommitHash()
+    var dirty = gitWorkingTreeDirty()
     var version = project.version
 
-    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version]
+    def props = ["version": version, "commit": hash, "dirty": dirty, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version]
 
     for (var prop : props) {
         String value = prop.value;
-        if (!(value==~/^ *((['"\[{].*)|([0-9]*$))/)) {
+        if (!(value==~/^ *((['"\[{].*)|([0-9]*$)|(true|false$))/)) {
             value = "\"$value\"";
         }
         props[prop.key] = value
@@ -158,13 +173,6 @@ jar {
 
     from("LICENSE.md") {
         rename { "${it}_${base.archivesName.get()}" }
-    }
-
-    if (!isInGHA) {
-        def hash = gitCommitHash()
-        if (!hash.equals("<UnknownCommit>")) {
-            archiveClassifier.set(hash.substring(0, 7))
-        }
     }
 }
 

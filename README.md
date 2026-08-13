@@ -10,6 +10,7 @@ A fork of [MCRcortex/voxy](https://github.com/MCRcortex/voxy) for Minecraft 26.2
 - Bounds GPU-generated draw commands to their allocated buffer regions.
 - Prevents pending Vulkan readbacks from running after their consumers shut down.
 - Prevents partial-height block faces from incorrectly occluding adjacent terrain.
+- Preserves dirty section data for retry after failed storage writes.
 - Adds a concurrent SQLite storage backend for sharing one LoD database across client processes.
 - Maps saved server names and proxy addresses to stable storage aliases.
 - Builds every pushed commit as a 90-day GitHub Actions artifact, and retains the latest successful `dev` build.

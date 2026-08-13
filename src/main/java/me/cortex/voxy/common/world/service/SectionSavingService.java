@@ -15,6 +15,7 @@ public class SectionSavingService {
     private static final int SOFT_MAX_QUEUE_SIZE = 5_000;
 
     private final Service service;
+    private final ThreadLocal<Boolean> processingSave = ThreadLocal.withInitial(() -> false);
     private record SaveEntry(WorldEngine engine, WorldSection section) {}
     private final ConcurrentLinkedDeque<SaveEntry> saveQueue = new ConcurrentLinkedDeque<>();
 
@@ -26,18 +27,27 @@ public class SectionSavingService {
         var task = this.saveQueue.pop();
         var section = task.section;
         section.assertNotFree();
+        this.processingSave.set(true);
         try {
             //Unmark it dirty here (if it wasnt or w/e) so that it doesnt pointlessly resave (in theory this should be safe to do)
             if (section.exchangeIsInSaveQueue(false)) {
                 section.setNotDirty();//do after the atomic exchange
-                task.engine.storage.saveSection(section);
+                try {
+                    task.engine.storage.saveSection(section);
+                } catch (Exception e) {
+                    section.markDirty();
+                    Logger.error("Voxy saver had an exception while executing please check logs and report the error", e);
+                }
             } else {
                 section.setNotDirty();
             }
-        } catch (Exception e) {
-            Logger.error("Voxy saver had an exception while executing please check logs and report error", e);
+        } finally {
+            try {
+                section.release();
+            } finally {
+                this.processingSave.remove();
+            }
         }
-        section.release();
     }
 
     /*
@@ -57,7 +67,7 @@ public class SectionSavingService {
             }
 
             //Hard limit the save count to prevent OOM
-            if ((!nonBlocking) && this.getTaskCount() > SOFT_MAX_QUEUE_SIZE) {
+            if ((!nonBlocking) && !this.processingSave.get() && this.getTaskCount() > SOFT_MAX_QUEUE_SIZE) {
                 //wait a bit
                 Thread.yield();
                 /*
