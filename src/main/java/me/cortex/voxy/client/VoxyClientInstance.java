@@ -27,11 +27,21 @@ public class VoxyClientInstance extends VoxyInstance {
         {
             var path = FlashbackCompat.getReplayStoragePath();
             this.noIngestOverride = path != null;
+            boolean sharedStorage = false;
             if (path == null) {
-                path = getBasePath();
+                var location = getStorageLocation();
+                path = location.path();
+                sharedStorage = location.sharedStorage();
             }
             var basePath = this.basePath = path.normalize();
-            this.config = StorageConfigUtil.getCreateStorageConfig(Config.class, c->c.version==1&&c.sectionStorageConfig!=null, ()->DEFAULT_STORAGE_CONFIG, basePath);
+            var defaultStorageConfig = sharedStorage ? DEFAULT_SHARED_STORAGE_CONFIG : DEFAULT_STORAGE_CONFIG;
+            boolean requireSharedStorage = sharedStorage;
+            this.config = StorageConfigUtil.getCreateStorageConfig(Config.class,
+                    c -> c.version == 1 && c.sectionStorageConfig != null
+                            && (!requireSharedStorage
+                            || StorageConfigUtil.isSharedSerializer(c.sectionStorageConfig)),
+                    () -> defaultStorageConfig,
+                    basePath);
         }
         super();
         this.updateDedicatedThreads();
@@ -96,14 +106,23 @@ public class VoxyClientInstance extends VoxyInstance {
     }
 
     private static final Config DEFAULT_STORAGE_CONFIG;
+    private static final Config DEFAULT_SHARED_STORAGE_CONFIG;
     static {
         var config = new Config();
         config.sectionStorageConfig = StorageConfigUtil.createDefaultSerializer();
         DEFAULT_STORAGE_CONFIG = config;
+
+        var sharedConfig = new Config();
+        sharedConfig.sectionStorageConfig = StorageConfigUtil.createSharedSerializer();
+        DEFAULT_SHARED_STORAGE_CONFIG = sharedConfig;
     }
 
-    private static Path getBasePath() {
+    private record StorageLocation(Path path, boolean sharedStorage) {
+    }
+
+    private static StorageLocation getStorageLocation() {
         Path basePath = Minecraft.getInstance().gameDirectory.toPath().resolve(".voxy").resolve("saves");
+        boolean sharedStorage = false;
         var iserver = Minecraft.getInstance().getSingleplayerServer();
         if (iserver != null) {
             basePath = iserver.getWorldPath(LevelResource.ROOT).resolve("voxy");
@@ -121,11 +140,14 @@ public class VoxyClientInstance extends VoxyInstance {
                     if (info.isRealm()) {
                         basePath = basePath.resolve("realms");
                     } else {
-                        basePath = basePath.resolve(info.ip.replace(":", "_"));
+                        var resolution = ServerStorageAliases.resolve(
+                                Minecraft.getInstance().gameDirectory.toPath(), info.name, info.ip);
+                        basePath = basePath.resolve(resolution.storageKey());
+                        sharedStorage = resolution.sharedStorage();
                     }
                 }
             }
         }
-        return basePath.toAbsolutePath();
+        return new StorageLocation(basePath.toAbsolutePath(), sharedStorage);
     }
 }
