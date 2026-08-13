@@ -6,6 +6,7 @@ import me.cortex.voxy.common.util.MemoryBuffer;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.function.IntFunction;
 import java.util.function.LongConsumer;
 
 public class DelegatingStorageAdaptor extends StorageBackend {
@@ -40,6 +41,17 @@ public class DelegatingStorageAdaptor extends StorageBackend {
     @Override
     public Int2ObjectOpenHashMap<byte[]> getIdMappingsData() {
         return this.delegate.getIdMappingsData();
+    }
+
+    @Override
+    public int getOrCreateIdMapping(
+            int entryType, byte[] identity, IntFunction<byte[]> serializedMappingFactory) {
+        return this.delegate.getOrCreateIdMapping(entryType, identity, serializedMappingFactory);
+    }
+
+    @Override
+    public long getIdMappingVersion() {
+        return this.delegate.getIdMappingVersion();
     }
 
     @Override

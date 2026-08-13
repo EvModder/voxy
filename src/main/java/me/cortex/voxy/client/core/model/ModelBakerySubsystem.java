@@ -48,6 +48,7 @@ public class ModelBakerySubsystem {
         if (this.processingThreadException != null) {
             throw new RuntimeException(this.processingThreadException);
         }
+        this.mapper.refreshMappingsIfChanged();
         this.factory.processUploads();
     }
 
@@ -69,6 +70,9 @@ public class ModelBakerySubsystem {
     private final ReentrantLock enqueueLock = new ReentrantLock();
     private final IntOpenHashSet seenIds = new IntOpenHashSet(6000);//TODO: move to a lock free concurrent hashmap
     public void requestBlockBake(int blockId) {
+        if (this.mapper.getBlockStateCount() <= blockId) {
+            this.mapper.refreshMappingsNowIfChanged();
+        }
         if (this.mapper.getBlockStateCount() <= blockId) {
             Logger.error("Error, got bakeing request for out of range state id. StateId: " + blockId + " max id: " + this.mapper.getBlockStateCount(), new Exception());
             return;

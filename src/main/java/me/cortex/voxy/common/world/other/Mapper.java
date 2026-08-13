@@ -4,6 +4,7 @@ import com.mojang.serialization.Dynamic;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.config.IMappingStorage;
+import me.cortex.voxy.common.config.MappingIdentity;
 import me.cortex.voxy.common.util.Pair;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.Holder;
@@ -29,6 +30,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
@@ -36,6 +38,7 @@ import java.util.function.Consumer;
 //There are independent mappings for biome and block states, these get combined in the shader and allow for more
 // variaty of things
 public class Mapper {
+    private static final long MAPPING_VERSION_CHECK_INTERVAL_NANOS = TimeUnit.MILLISECONDS.toNanos(250);
     private static final int BLOCK_STATE_TYPE = 1;
     private static final int BIOME_TYPE = 2;
 
@@ -46,21 +49,27 @@ public class Mapper {
     private final ReentrantLock blockLock = new ReentrantLock();
     private final ConcurrentHashMap<BlockState, StateEntry> block2stateEntry = new ConcurrentHashMap<>(2000,0.75f, 10);
     private final ObjectArrayList<StateEntry> blockId2stateEntry = new ObjectArrayList<>();
+    private volatile StateEntry[] blockStateSnapshot = new StateEntry[0];
 
 
     private final ReentrantLock biomeLock = new ReentrantLock();
+    private final ReentrantLock mappingRefreshLock = new ReentrantLock();
     private final ConcurrentHashMap<String, BiomeEntry> biome2biomeEntry = new ConcurrentHashMap<>(2000,0.75f, 10);
     private final ObjectArrayList<BiomeEntry> biomeId2biomeEntry = new ObjectArrayList<>();
 
-    private Consumer<StateEntry> newStateCallback;
-    private Consumer<BiomeEntry> newBiomeCallback;
+    private volatile Consumer<StateEntry> newStateCallback;
+    private volatile Consumer<BiomeEntry> newBiomeCallback;
+    private volatile long mappingVersion = -1;
+    private volatile long nextMappingVersionCheck;
     public Mapper(IMappingStorage storage) {
         this.storage = storage;
         //Insert air since its a special entry (index 0)
         var airEntry = new StateEntry(0, Blocks.AIR.defaultBlockState());
         this.block2stateEntry.put(airEntry.state, airEntry);
         this.blockId2stateEntry.add(airEntry);
+        this.publishBlockStateSnapshot();
 
+        this.mappingVersion = this.storage.getIdMappingVersion();
         this.loadFromStorage();
     }
 
@@ -162,6 +171,7 @@ public class Mapper {
             }
             this.blockId2stateEntry.add(entry);
         });
+        this.publishBlockStateSnapshot();
 
         bentries.stream().sorted(Comparator.comparing(a->a.id)).forEach(entry -> {
             if (this.biomeId2biomeEntry.size() != entry.id) {
@@ -177,56 +187,170 @@ public class Mapper {
     }
 
     public final int getBlockStateCount() {
-        return this.blockId2stateEntry.size();
+        return this.blockStateSnapshot.length;
     }
 
     private StateEntry registerNewBlockState(BlockState state) {
-        this.blockLock.lock();
-        var entry = this.block2stateEntry.get(state);
-        if (entry != null) {
-            this.blockLock.unlock();
-            return entry;
+        var candidate = new StateEntry(0, state);
+        byte[] identity = MappingIdentity.fromSerializedMapping(candidate.serialize());
+        int sharedId = this.storage.getOrCreateIdMapping(BLOCK_STATE_TYPE, identity,
+                id -> new StateEntry(id, state).serialize());
+        if (sharedId != IMappingStorage.NON_ATOMIC_MAPPING) {
+            return this.installSharedBlockState(sharedId, state);
         }
 
-        entry = new StateEntry(this.blockId2stateEntry.size(), state);
-        this.blockId2stateEntry.add(entry);
-        this.block2stateEntry.put(state, entry);
-        this.blockLock.unlock();
+        StateEntry entry;
+        this.blockLock.lock();
+        try {
+            entry = this.block2stateEntry.get(state);
+            if (entry != null) {
+                return entry;
+            }
 
-        byte[] serialized = entry.serialize();
-        ByteBuffer buffer = MemoryUtil.memAlloc(serialized.length);
-        buffer.put(serialized);
-        buffer.rewind();
-        this.storage.putIdMapping(entry.id | (BLOCK_STATE_TYPE<<30), buffer);
-        MemoryUtil.memFree(buffer);
+            entry = new StateEntry(this.blockId2stateEntry.size(), state);
+            this.blockId2stateEntry.add(entry);
+            this.block2stateEntry.put(state, entry);
+            this.publishBlockStateSnapshot();
+        } finally {
+            this.blockLock.unlock();
+        }
+
+        this.putMapping(entry.id | (BLOCK_STATE_TYPE << 30), entry.serialize());
         //this.storage.flush();
 
-        if (this.newStateCallback!=null)this.newStateCallback.accept(entry);
+        if (this.newStateCallback != null) {
+            this.newStateCallback.accept(entry);
+        }
         return entry;
     }
 
     private BiomeEntry registerNewBiome(String biome) {
-        this.biomeLock.lock();
-        var entry = this.biome2biomeEntry.get(biome);
-        if (entry != null) {
-            this.biomeLock.unlock();
-            return entry;
+        var candidate = new BiomeEntry(0, biome);
+        byte[] identity = MappingIdentity.fromSerializedMapping(candidate.serialize());
+        int sharedId = this.storage.getOrCreateIdMapping(BIOME_TYPE, identity,
+                id -> new BiomeEntry(id, biome).serialize());
+        if (sharedId != IMappingStorage.NON_ATOMIC_MAPPING) {
+            return this.installSharedBiome(sharedId, biome);
         }
-        entry = new BiomeEntry(this.biomeId2biomeEntry.size(), biome);
-        this.biomeId2biomeEntry.add(entry);
-        this.biome2biomeEntry.put(biome, entry);
-        this.biomeLock.unlock();
 
-        byte[] serialized = entry.serialize();
-        ByteBuffer buffer = MemoryUtil.memAlloc(serialized.length);
-        buffer.put(serialized);
-        buffer.rewind();
-        this.storage.putIdMapping(entry.id | (BIOME_TYPE<<30), buffer);
-        MemoryUtil.memFree(buffer);
+        BiomeEntry entry;
+        this.biomeLock.lock();
+        try {
+            entry = this.biome2biomeEntry.get(biome);
+            if (entry != null) {
+                return entry;
+            }
+            entry = new BiomeEntry(this.biomeId2biomeEntry.size(), biome);
+            this.biomeId2biomeEntry.add(entry);
+            this.biome2biomeEntry.put(biome, entry);
+        } finally {
+            this.biomeLock.unlock();
+        }
+
+        this.putMapping(entry.id | (BIOME_TYPE << 30), entry.serialize());
         //this.storage.flush();
 
-        if (this.newBiomeCallback!=null)this.newBiomeCallback.accept(entry);
+        if (this.newBiomeCallback != null) {
+            this.newBiomeCallback.accept(entry);
+        }
         return entry;
+    }
+
+    private StateEntry installSharedBlockState(int id, BlockState state) {
+        StateEntry entry = null;
+        boolean added = false;
+        this.blockLock.lock();
+        try {
+            if (id < this.blockId2stateEntry.size()) {
+                entry = this.blockId2stateEntry.get(id);
+                if (!entry.state.equals(state)) {
+                    throw new IllegalStateException("Shared block-state mapping conflict at ID " + id);
+                }
+            } else if (id == this.blockId2stateEntry.size()) {
+                var candidate = new StateEntry(id, state);
+                var existing = this.block2stateEntry.putIfAbsent(state, candidate);
+                if (existing != null && existing.id != id) {
+                    throw new IllegalStateException("Shared block state has multiple IDs");
+                }
+                entry = existing == null ? candidate : existing;
+                this.blockId2stateEntry.add(entry);
+                this.publishBlockStateSnapshot();
+                added = true;
+            }
+
+            if (entry != null) {
+                var existing = this.block2stateEntry.putIfAbsent(state, entry);
+                if (existing != null && existing.id != id) {
+                    throw new IllegalStateException("Shared block state has multiple IDs");
+                }
+            }
+        } finally {
+            this.blockLock.unlock();
+        }
+
+        if (entry == null) {
+            this.refreshMappingsFromStorage();
+            entry = this.block2stateEntry.get(state);
+            if (entry == null || entry.id != id) {
+                throw new IllegalStateException("Shared block-state mapping did not become visible locally");
+            }
+        } else if (added && this.newStateCallback != null) {
+            this.newStateCallback.accept(entry);
+        }
+        return entry;
+    }
+
+    private BiomeEntry installSharedBiome(int id, String biome) {
+        BiomeEntry entry = null;
+        boolean added = false;
+        this.biomeLock.lock();
+        try {
+            if (id < this.biomeId2biomeEntry.size()) {
+                entry = this.biomeId2biomeEntry.get(id);
+                if (!entry.biome.equals(biome)) {
+                    throw new IllegalStateException("Shared biome mapping conflict at ID " + id);
+                }
+            } else if (id == this.biomeId2biomeEntry.size()) {
+                var candidate = new BiomeEntry(id, biome);
+                var existing = this.biome2biomeEntry.putIfAbsent(biome, candidate);
+                if (existing != null && existing.id != id) {
+                    throw new IllegalStateException("Shared biome has multiple IDs");
+                }
+                entry = existing == null ? candidate : existing;
+                this.biomeId2biomeEntry.add(entry);
+                added = true;
+            }
+
+            if (entry != null) {
+                var existing = this.biome2biomeEntry.putIfAbsent(biome, entry);
+                if (existing != null && existing.id != id) {
+                    throw new IllegalStateException("Shared biome has multiple IDs");
+                }
+            }
+        } finally {
+            this.biomeLock.unlock();
+        }
+
+        if (entry == null) {
+            this.refreshMappingsFromStorage();
+            entry = this.biome2biomeEntry.get(biome);
+            if (entry == null || entry.id != id) {
+                throw new IllegalStateException("Shared biome mapping did not become visible locally");
+            }
+        } else if (added && this.newBiomeCallback != null) {
+            this.newBiomeCallback.accept(entry);
+        }
+        return entry;
+    }
+
+    private void putMapping(int mappingKey, byte[] serialized) {
+        ByteBuffer buffer = MemoryUtil.memAlloc(serialized.length);
+        try {
+            buffer.put(serialized).rewind();
+            this.storage.putIdMapping(mappingKey, buffer);
+        } finally {
+            MemoryUtil.memFree(buffer);
+        }
     }
 
 
@@ -237,7 +361,7 @@ public class Mapper {
     }
 
     public BlockState getBlockStateFromBlockId(int blockId) {
-        return this.blockId2stateEntry.get(blockId).state;
+        return this.getStateEntry(blockId).state;
     }
 
     public int getIdForBlockState(BlockState state) {
@@ -256,7 +380,16 @@ public class Mapper {
     }
 
     public int getBlockStateOpacity(int blockId) {
-        return this.blockId2stateEntry.get(blockId).opacity;
+        return this.getStateEntry(blockId).opacity;
+    }
+
+    private StateEntry getStateEntry(int blockId) {
+        StateEntry[] entries = this.blockStateSnapshot;
+        if (blockId < 0 || blockId >= entries.length) {
+            this.refreshMappingsFromStorage();
+            entries = this.blockStateSnapshot;
+        }
+        return entries[blockId];
     }
 
     public int getIdForBiome(Holder<Biome> biome) {
@@ -275,36 +408,135 @@ public class Mapper {
         return (Byte.toUnsignedLong(light)<<56)|(Integer.toUnsignedLong(biomeId) << 47)|(Integer.toUnsignedLong(blockId)<<27);
     }
 
-    //TODO: fixme: synchronize access to this.blockId2stateEntry
     public StateEntry[] getStateEntries() {
-        this.blockLock.lock();
-        var set = new ArrayList<>(this.blockId2stateEntry);
-        StateEntry[] out = new StateEntry[set.size()];
-        int i = 0;
-        for (var entry : set) {
-            if (entry.id != i++) {
-                throw new IllegalStateException();
-            }
-            out[i-1] = entry;
-        }
-        this.blockLock.unlock();
-        return out;
+        return this.blockStateSnapshot.clone();
     }
 
-    //TODO: fixme: synchronize access to this.biomeId2biomeEntry
     public BiomeEntry[] getBiomeEntries() {
+        this.refreshMappingsIfChanged();
         this.biomeLock.lock();
-        var set = new ArrayList<>(this.biomeId2biomeEntry);
-        BiomeEntry[] out = new BiomeEntry[set.size()];
-        int i = 0;
-        for (var entry : set) {
-            if (entry.id != i++) {
-                throw new IllegalStateException();
+        try {
+            var set = new ArrayList<>(this.biomeId2biomeEntry);
+            BiomeEntry[] out = new BiomeEntry[set.size()];
+            int index = 0;
+            for (var entry : set) {
+                if (entry.id != index) {
+                    throw new IllegalStateException();
+                }
+                out[index++] = entry;
             }
-            out[i-1] = entry;
+            return out;
+        } finally {
+            this.biomeLock.unlock();
         }
-        this.biomeLock.unlock();
-        return out;
+    }
+
+    public void refreshMappingsIfChanged() {
+        long now = System.nanoTime();
+        if (now < this.nextMappingVersionCheck) {
+            return;
+        }
+        this.nextMappingVersionCheck = now + MAPPING_VERSION_CHECK_INTERVAL_NANOS;
+        this.refreshMappingsNowIfChanged();
+    }
+
+    public void refreshMappingsNowIfChanged() {
+        long currentVersion = this.storage.getIdMappingVersion();
+        if (currentVersion >= 0 && currentVersion != this.mappingVersion) {
+            this.refreshMappingsFromStorage();
+        }
+    }
+
+    private void refreshMappingsFromStorage() {
+        this.mappingRefreshLock.lock();
+        List<StateEntry> addedStates = new ArrayList<>();
+        List<BiomeEntry> addedBiomes = new ArrayList<>();
+        try {
+            long observedVersion = this.storage.getIdMappingVersion();
+            var mappings = this.storage.getIdMappingsData();
+            List<StateEntry> states = new ArrayList<>();
+            List<BiomeEntry> biomes = new ArrayList<>();
+            boolean[] forceResave = new boolean[1];
+            for (var mapping : mappings.int2ObjectEntrySet()) {
+                int entryType = mapping.getIntKey() >>> 30;
+                int id = mapping.getIntKey() & ((1 << 30) - 1);
+                if (entryType == BLOCK_STATE_TYPE) {
+                    states.add(StateEntry.deserialize(id, mapping.getValue(), forceResave));
+                } else if (entryType == BIOME_TYPE) {
+                    biomes.add(BiomeEntry.deserialize(id, mapping.getValue()));
+                }
+            }
+            if (forceResave[0]) {
+                throw new IllegalStateException("Shared mappings require a data fix and cannot be refreshed safely");
+            }
+
+            states.sort(Comparator.comparingInt(entry -> entry.id));
+            this.blockLock.lock();
+            try {
+                for (var entry : states) {
+                    if (entry.id < this.blockId2stateEntry.size()) {
+                        var current = this.blockId2stateEntry.get(entry.id);
+                        if (!current.state.equals(entry.state)) {
+                            throw new IllegalStateException("Shared block-state mapping conflict at ID " + entry.id);
+                        }
+                        continue;
+                    }
+                    if (entry.id != this.blockId2stateEntry.size()) {
+                        throw new IllegalStateException("Gap in shared block-state mappings at ID " + entry.id);
+                    }
+                    var current = this.block2stateEntry.putIfAbsent(entry.state, entry);
+                    if (current != null && current.id != entry.id) {
+                        throw new IllegalStateException("Shared block state has multiple IDs");
+                    }
+                    this.blockId2stateEntry.add(entry);
+                    addedStates.add(entry);
+                }
+                if (!addedStates.isEmpty()) {
+                    this.publishBlockStateSnapshot();
+                }
+            } finally {
+                this.blockLock.unlock();
+            }
+
+            biomes.sort(Comparator.comparingInt(entry -> entry.id));
+            this.biomeLock.lock();
+            try {
+                for (var entry : biomes) {
+                    if (entry.id < this.biomeId2biomeEntry.size()) {
+                        var current = this.biomeId2biomeEntry.get(entry.id);
+                        if (!current.biome.equals(entry.biome)) {
+                            throw new IllegalStateException("Shared biome mapping conflict at ID " + entry.id);
+                        }
+                        continue;
+                    }
+                    if (entry.id != this.biomeId2biomeEntry.size()) {
+                        throw new IllegalStateException("Gap in shared biome mappings at ID " + entry.id);
+                    }
+                    var current = this.biome2biomeEntry.putIfAbsent(entry.biome, entry);
+                    if (current != null && current.id != entry.id) {
+                        throw new IllegalStateException("Shared biome has multiple IDs");
+                    }
+                    this.biomeId2biomeEntry.add(entry);
+                    addedBiomes.add(entry);
+                }
+            } finally {
+                this.biomeLock.unlock();
+            }
+            this.mappingVersion = observedVersion;
+        } finally {
+            this.mappingRefreshLock.unlock();
+        }
+
+        if (this.newStateCallback != null) {
+            addedStates.forEach(this.newStateCallback);
+        }
+        if (this.newBiomeCallback != null) {
+            addedBiomes.forEach(this.newBiomeCallback);
+        }
+    }
+
+    private void publishBlockStateSnapshot() {
+        this.blockStateSnapshot = this.blockId2stateEntry.toArray(StateEntry[]::new);
     }
 
     public void forceResaveStates() {

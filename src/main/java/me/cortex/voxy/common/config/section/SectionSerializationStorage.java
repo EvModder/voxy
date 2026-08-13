@@ -12,6 +12,7 @@ import me.cortex.voxy.common.world.other.Mapper;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.function.IntFunction;
 import java.util.function.LongConsumer;
 
 public class SectionSerializationStorage extends SectionStorage {
@@ -60,6 +61,17 @@ public class SectionSerializationStorage extends SectionStorage {
     @Override
     public Int2ObjectOpenHashMap<byte[]> getIdMappingsData() {
         return this.backend.getIdMappingsData();
+    }
+
+    @Override
+    public int getOrCreateIdMapping(
+            int entryType, byte[] identity, IntFunction<byte[]> serializedMappingFactory) {
+        return this.backend.getOrCreateIdMapping(entryType, identity, serializedMappingFactory);
+    }
+
+    @Override
+    public long getIdMappingVersion() {
+        return this.backend.getIdMappingVersion();
     }
 
     @Override
