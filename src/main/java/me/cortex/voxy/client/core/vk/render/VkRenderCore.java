@@ -276,7 +276,9 @@ public class VkRenderCore {
             try {
                 //Idle the device BEFORE destroying anything, so no destroy races
                 // GPU work still referencing these objects
-                this.frameCtx.waitIdleRetireAll();
+                //Pending traversal readbacks must be discarded at shutdown. Their
+                // callbacks submit work to nodeManager, which has already stopped.
+                this.downloadStream.waitDiscard();
                 //modelService.shutdown() joins the (CPU) baking thread and frees
                 // the VkModelStore exactly once. It OWNS the store's lifetime —
                 // VkRenderCore must not free modelStore itself (double
@@ -291,7 +293,6 @@ public class VkRenderCore {
                 this.ssao.free();
                 this.compositor.free();
                 this.viewportSelector.free();
-                this.downloadStream.flushWaitClear();
                 this.uploadStream.free();
                 this.downloadStream.free();
                 this.frameCtx.free();

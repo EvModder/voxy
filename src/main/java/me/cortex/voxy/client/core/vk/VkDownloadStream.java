@@ -40,6 +40,7 @@ public class VkDownloadStream extends AbstractDownloadStream {
     // node-visibility callbacks) a whole frame late. Capture the true recording
     // frame at commit() instead.
     private long recordFrame = -1;
+    private boolean discardCallbacks;
 
     public VkDownloadStream(VkFrameCtx ctx, long size) {
         this.ctx = ctx;
@@ -126,8 +127,10 @@ public class VkDownloadStream extends AbstractDownloadStream {
     private void retireUpTo(long retiredFrame) {
         while (!this.frames.isEmpty() && this.frames.peek().frameIdx <= retiredFrame) {
             var frame = this.frames.pop();
-            for (var data : frame.data) {
-                data.resultConsumer.consume(this.readbackPtr + data.downloadStreamOffset, data.size);
+            if (!this.discardCallbacks) {
+                for (var data : frame.data) {
+                    data.resultConsumer.consume(this.readbackPtr + data.downloadStreamOffset, data.size);
+                }
             }
             frame.allocations.forEach(this.allocationArena::free);
         }
@@ -135,10 +138,22 @@ public class VkDownloadStream extends AbstractDownloadStream {
 
     @Override
     public void waitDiscard() {
-        this.ctx.waitIdleRetireAll();
-        while (!this.frames.isEmpty()) {
-            var frame = this.frames.pop();
-            frame.allocations.forEach(this.allocationArena::free);
+        this.discardCallbacks = true;
+        try {
+            this.ctx.waitIdleRetireAll();
+            while (!this.frames.isEmpty()) {
+                var frame = this.frames.pop();
+                frame.allocations.forEach(this.allocationArena::free);
+            }
+            this.thisFrameAllocations.forEach(this.allocationArena::free);
+            this.thisFrameAllocations.clear();
+            this.thisFrameDownloadList.clear();
+            this.downloadList.clear();
+            this.caddr = -1;
+            this.offset = 0;
+            this.recordFrame = -1;
+        } finally {
+            this.discardCallbacks = false;
         }
     }
 
