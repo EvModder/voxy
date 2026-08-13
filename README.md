@@ -7,6 +7,7 @@ A fork of [MCRcortex/voxy](https://github.com/MCRcortex/voxy) for Minecraft 26.2
 - Adds a native Vulkan renderer that uses Minecraft's Vulkan device and command stream.
 - Supports Vulkan on macOS through MoltenVK while preserving the existing OpenGL renderer.
 - Hardens Vulkan synchronization and first-frame draw handling on MoltenVK.
+- Bounds GPU-generated draw commands to their allocated buffer regions.
 - Prevents pending Vulkan readbacks from running after their consumers shut down.
 - Prevents partial-height block faces from incorrectly occluding adjacent terrain.
 - Adds a concurrent SQLite storage backend for sharing one LoD database across client processes.

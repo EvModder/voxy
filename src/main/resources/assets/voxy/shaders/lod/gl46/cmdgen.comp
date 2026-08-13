@@ -48,6 +48,18 @@ void writeCmd(uint idx, uint instance, uint offset, uint quadCount) {
     cmdBuffer[idx] = cmd;
 }
 
+uint reserveTranslucentDraw() {
+    uint drawIndex = atomicAdd(translucentDrawCount, 0);
+    while (drawIndex < uint(MAX_TRANSLUCENT_DRAWS)) {
+        uint observed = atomicCompSwap(translucentDrawCount, drawIndex, drawIndex + 1);
+        if (observed == drawIndex) {
+            return drawIndex;
+        }
+        drawIndex = observed;
+    }
+    return uint(MAX_TRANSLUCENT_DRAWS);
+}
+
 void main() {
     if (gl_GlobalInvocationID.x >= sectionCount) {
         return;
@@ -95,10 +107,16 @@ void main() {
 
         uint cmdCnt = bitCount(msk);
         uint cmdPtr = atomicAdd(opaqueDrawCount, cmdCnt);
+        bool opaqueInBounds = cmdPtr <= uint(MAX_OPAQUE_DRAWS)
+                && cmdCnt <= uint(MAX_OPAQUE_DRAWS) - cmdPtr;
 
         uint tCmdPtr = 0;
+        bool temporalInBounds = false;
         if (renderTemporally) {
-            tCmdPtr = atomicAdd(temporalOpaqueDrawCount, cmdCnt) + TEMPORAL_OFFSET;
+            uint temporalBase = atomicAdd(temporalOpaqueDrawCount, cmdCnt);
+            tCmdPtr = temporalBase + TEMPORAL_OFFSET;
+            temporalInBounds = temporalBase <= uint(MAX_TEMPORAL_DRAWS)
+                    && cmdCnt <= uint(MAX_TEMPORAL_DRAWS) - temporalBase;
         }
 
         //TODO: make totalQuads also have temporal amount
@@ -110,13 +128,15 @@ void main() {
         //Translucency
         count = counts.x&0xFFFFu;
         if (count != 0) {
-            uint tp = atomicAdd(translucentDrawCount, 1)+TRANSLUCENT_WRITE_BASE;
-            translucentCommandData[tp] = drawId;
-            uvec3 absRel = abs(relative);
-            uint distToCamera = (absRel.x+absRel.y+absRel.z)<<detail;
-            //The -1 is because we want 0 to TRANSLUCENT_WRITE_BASE, exclusive of ending, not inclusive (0->1023)
-            distToCamera = (TRANSLUCENT_WRITE_BASE-1)-min(distToCamera, (TRANSLUCENT_WRITE_BASE-1));
-            atomicAdd(translucentCommandData[distToCamera], 1);
+            uint translucentIndex = reserveTranslucentDraw();
+            if (translucentIndex < uint(MAX_TRANSLUCENT_DRAWS)) {
+                translucentCommandData[translucentIndex + TRANSLUCENT_WRITE_BASE] = drawId;
+                uvec3 absRel = abs(relative);
+                uint distToCamera = (absRel.x+absRel.y+absRel.z)<<detail;
+                //The -1 is because we want 0 to TRANSLUCENT_WRITE_BASE, exclusive of ending, not inclusive (0->1023)
+                distToCamera = (TRANSLUCENT_WRITE_BASE-1)-min(distToCamera, (TRANSLUCENT_WRITE_BASE-1));
+                atomicAdd(translucentCommandData[distToCamera], 1);
+            }
             #ifdef HAS_STATISTICS
             totalQuads += count;
             #endif
@@ -126,8 +146,10 @@ void main() {
         //Double sided quads
         count = (counts.x>>16)&0xFFFFu;
         if (count != 0) {
-            writeCmd(cmdPtr++, drawId, ptr, count);
-            if (renderTemporally) {
+            if (opaqueInBounds) {
+                writeCmd(cmdPtr++, drawId, ptr, count);
+            }
+            if (renderTemporally && temporalInBounds) {
                 writeCmd(tCmdPtr++, drawId, ptr, count);
             }
             #ifdef HAS_STATISTICS
@@ -139,8 +161,10 @@ void main() {
         //Down
         count = (counts.y)&0xFFFFu;
         if (((msk&(1u<<0))!=0)) {
-            writeCmd(cmdPtr++, drawId, ptr, count);
-            if (renderTemporally) {
+            if (opaqueInBounds) {
+                writeCmd(cmdPtr++, drawId, ptr, count);
+            }
+            if (renderTemporally && temporalInBounds) {
                 writeCmd(tCmdPtr++, drawId, ptr, count);
             }
             #ifdef HAS_STATISTICS
@@ -152,8 +176,10 @@ void main() {
         //Up
         count = (counts.y>>16)&0xFFFFu;
         if ((msk&(1u<<1))!=0) {
-            writeCmd(cmdPtr++, drawId, ptr, count);
-            if (renderTemporally) {
+            if (opaqueInBounds) {
+                writeCmd(cmdPtr++, drawId, ptr, count);
+            }
+            if (renderTemporally && temporalInBounds) {
                 writeCmd(tCmdPtr++, drawId, ptr, count);
             }
             #ifdef HAS_STATISTICS
@@ -165,8 +191,10 @@ void main() {
         //North
         count = (counts.z)&0xFFFFu;
         if ((msk&(1u<<2))!=0) {
-            writeCmd(cmdPtr++, drawId, ptr, count);
-            if (renderTemporally) {
+            if (opaqueInBounds) {
+                writeCmd(cmdPtr++, drawId, ptr, count);
+            }
+            if (renderTemporally && temporalInBounds) {
                 writeCmd(tCmdPtr++, drawId, ptr, count);
             }
             #ifdef HAS_STATISTICS
@@ -178,8 +206,10 @@ void main() {
         //South
         count = (counts.z>>16)&0xFFFFu;
         if ((msk&(1u<<3))!=0) {
-            writeCmd(cmdPtr++, drawId, ptr, count);
-            if (renderTemporally) {
+            if (opaqueInBounds) {
+                writeCmd(cmdPtr++, drawId, ptr, count);
+            }
+            if (renderTemporally && temporalInBounds) {
                 writeCmd(tCmdPtr++, drawId, ptr, count);
             }
             #ifdef HAS_STATISTICS
@@ -191,8 +221,10 @@ void main() {
         //West
         count = (counts.w)&0xFFFFu;
         if ((msk&(1u<<4))!=0) {
-            writeCmd(cmdPtr++, drawId, ptr, count);
-            if (renderTemporally) {
+            if (opaqueInBounds) {
+                writeCmd(cmdPtr++, drawId, ptr, count);
+            }
+            if (renderTemporally && temporalInBounds) {
                 writeCmd(tCmdPtr++, drawId, ptr, count);
             }
             #ifdef HAS_STATISTICS
@@ -204,8 +236,10 @@ void main() {
         //East
         count = (counts.w>>16)&0xFFFFu;
         if ((msk&(1u<<5))!=0) {
-            writeCmd(cmdPtr++, drawId, ptr, count);
-            if (renderTemporally) {
+            if (opaqueInBounds) {
+                writeCmd(cmdPtr++, drawId, ptr, count);
+            }
+            if (renderTemporally && temporalInBounds) {
                 writeCmd(tCmdPtr++, drawId, ptr, count);
             }
             #ifdef HAS_STATISTICS

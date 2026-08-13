@@ -58,6 +58,9 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
     private final Shader commandGenShader = Shader.make()
             .define("TRANSLUCENT_WRITE_BASE", 1024)
             .define("TEMPORAL_OFFSET", TEMPORAL_OFFSET)
+            .define("MAX_OPAQUE_DRAWS", OPAQUE_DRAW_COUNT)
+            .define("MAX_TRANSLUCENT_DRAWS", TRANSLUCENT_DRAW_COUNT)
+            .define("MAX_TEMPORAL_DRAWS", TEMPORAL_DRAW_COUNT)
 
             .define("TRANSLUCENT_DISTANCE_BUFFER_BINDING", 7)
 
@@ -84,6 +87,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
             .define("TRANSLUCENT_WRITE_BASE", 1024)//The size of the prefix sum array
             .define("TRANSLUCENT_DISTANCE_BUFFER_BINDING", 5)
             .define("TRANSLUCENT_OFFSET", TRANSLUCENT_OFFSET)
+            .define("MAX_TRANSLUCENT_DRAWS", TRANSLUCENT_DRAW_COUNT)
 
             .compile();
 
