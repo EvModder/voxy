@@ -73,6 +73,9 @@ public final class VkFrameHost {
                     dstAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
                 }
             }
+            int aspectMask = depth
+                    ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+                    : VK_IMAGE_ASPECT_COLOR_BIT;
             var imb = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
                     .srcAccessMask(srcAccess).dstAccessMask(dstAccess)
                     .oldLayout(oldLayout).newLayout(newLayout)
@@ -80,7 +83,7 @@ public final class VkFrameHost {
                     .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
                     .image(image);
             imb.subresourceRange()
-                    .aspectMask(depth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT)
+                    .aspectMask(aspectMask)
                     .levelCount(VK_REMAINING_MIP_LEVELS)
                     .layerCount(VK_REMAINING_ARRAY_LAYERS);
             vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, null, null, imb);

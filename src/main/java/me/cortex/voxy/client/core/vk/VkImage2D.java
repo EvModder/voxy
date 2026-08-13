@@ -102,6 +102,10 @@ public final class VkImage2D {
 
     /** Whole-image layout transition recorded into the current frame commands. */
     public void transition(int newLayout, int srcStage, int srcAccess, int dstStage, int dstAccess) {
+        if (this.currentLayout == VK_IMAGE_LAYOUT_UNDEFINED) {
+            srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+            srcAccess = 0;
+        }
         try (MemoryStack stack = stackPush()) {
             var imb = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
                     .srcAccessMask(srcAccess).dstAccessMask(dstAccess)
@@ -122,12 +126,15 @@ public final class VkImage2D {
     public record BatchEntry(VkImage2D image, int newLayout, int srcAccess, int dstAccess) {}
     public static void transitionBatch(java.util.List<BatchEntry> entries, int unionSrcStage, int unionDstStage) {
         if (entries.isEmpty()) return;
+        boolean anyUndefined = false;
         try (MemoryStack stack = stackPush()) {
             var imbs = VkImageMemoryBarrier.calloc(entries.size(), stack);
             for (int i = 0; i < entries.size(); i++) {
                 var e = entries.get(i);
+                boolean undefined = e.image.currentLayout == VK_IMAGE_LAYOUT_UNDEFINED;
+                anyUndefined |= undefined;
                 imbs.get(i).sType$Default()
-                        .srcAccessMask(e.srcAccess).dstAccessMask(e.dstAccess)
+                        .srcAccessMask(undefined ? 0 : e.srcAccess).dstAccessMask(e.dstAccess)
                         .oldLayout(e.image.currentLayout).newLayout(e.newLayout)
                         .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED).dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
                         .image(e.image.image)
@@ -135,7 +142,8 @@ public final class VkImage2D {
             }
             //Use the first image's ctx (all images share the same VkFrameCtx in Voxy).
             var cmd = entries.get(0).image.ctx.cmd();
-            vkCmdPipelineBarrier(cmd, unionSrcStage, unionDstStage, 0, null, null, imbs);
+            int srcStage = anyUndefined ? unionSrcStage | VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : unionSrcStage;
+            vkCmdPipelineBarrier(cmd, srcStage, unionDstStage, 0, null, null, imbs);
             for (var e : entries) e.image.currentLayout = e.newLayout;
         }
     }

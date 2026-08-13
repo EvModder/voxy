@@ -239,6 +239,8 @@ public class VkTraversal {
 
         //Download + reset the request queue
         this.downloadStream.download(this.requestBuffer, this::forwardDownloadResult);
+        this.ctx.barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
         vkCmdFillBuffer(this.ctx.cmd(), this.requestBuffer.buffer, 0, 4, 0);
         //The download copy read the requestBuffer (TRANSFER read); the fill
         // resets it (TRANSFER write). The next reader is next frame's traversal

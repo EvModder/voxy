@@ -10,6 +10,7 @@ import org.lwjgl.vulkan.VkPhysicalDevice;
 import org.lwjgl.vulkan.VkPhysicalDeviceFeatures2;
 import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties;
+import org.lwjgl.vulkan.VkPhysicalDeviceProperties2;
 import org.lwjgl.vulkan.VkPhysicalDeviceSubgroupProperties;
 import org.lwjgl.vulkan.VkPhysicalDeviceVulkan12Features;
 import org.lwjgl.vulkan.VkQueue;
@@ -25,6 +26,10 @@ import static org.lwjgl.vulkan.VK11.*;
 // MC owns (and destroys) the device/instance, so destroy() tears down only the
 // command pool Voxy created here.
 public final class VulkanContext {
+    //These paths were previously disabled by an invalid capabilities query and
+    //still have cross-driver correctness issues when genuinely enabled.
+    private static final boolean ENABLE_SUBGROUP_PATHS = false;
+
     public final VkInstance instance;
     public final VkPhysicalDevice physicalDevice;
     public final VkDevice device;
@@ -48,8 +53,16 @@ public final class VulkanContext {
         this.hasDrawIndirectCount = queryDrawIndirectCount(this.physicalDevice);
         var subgroup = querySubgroupProperties(this.physicalDevice);
         this.subgroupProps = subgroup;
-        this.subgroupArithmetic = subgroup != null && (subgroup.supportedOperations() & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT) != 0;
         this.subgroupSize = subgroup != null ? subgroup.subgroupSize() : 1;
+        int operations = subgroup != null ? subgroup.supportedOperations() : 0;
+        int stages = subgroup != null ? subgroup.supportedStages() : 0;
+        int requiredOperations = VK_SUBGROUP_FEATURE_ARITHMETIC_BIT
+                | VK_SUBGROUP_FEATURE_BASIC_BIT
+                | VK_SUBGROUP_FEATURE_CLUSTERED_BIT;
+        boolean deviceSupportsSubgroups = (operations & requiredOperations) == requiredOperations
+                && (stages & VK_SHADER_STAGE_COMPUTE_BIT) != 0
+                && this.subgroupSize >= 16;
+        this.subgroupArithmetic = ENABLE_SUBGROUP_PATHS && deviceSupportsSubgroups;
         String name;
         try (MemoryStack stack = stackPush()) {
             var props = VkPhysicalDeviceProperties.calloc(stack);
@@ -66,6 +79,7 @@ public final class VulkanContext {
         Logger.info("Voxy Vulkan context adopted Minecraft device: " + this.deviceName
                 + " (drawIndirectCount=" + this.hasDrawIndirectCount
                 + ", subgroupArithmetic=" + this.subgroupArithmetic
+                + " (deviceCapable=" + deviceSupportsSubgroups + ", gate=" + ENABLE_SUBGROUP_PATHS + ")"
                 + ", subgroupSize=" + this.subgroupSize + ")");
     }
 
@@ -81,8 +95,8 @@ public final class VulkanContext {
     private static VkPhysicalDeviceSubgroupProperties querySubgroupProperties(VkPhysicalDevice pd) {
         try (MemoryStack stack = stackPush()) {
             var sg = VkPhysicalDeviceSubgroupProperties.calloc(stack).sType$Default();
-            var f2 = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default().pNext(sg.address());
-            VK11.vkGetPhysicalDeviceFeatures2(pd, f2);
+            var p2 = VkPhysicalDeviceProperties2.calloc(stack).sType$Default().pNext(sg.address());
+            VK11.vkGetPhysicalDeviceProperties2(pd, p2);
             // Return a malloc'd copy so the caller can read it past the stack frame.
             var copy = VkPhysicalDeviceSubgroupProperties.malloc();
             copy.set(sg);
