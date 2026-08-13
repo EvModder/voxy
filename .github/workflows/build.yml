@@ -1,0 +1,86 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Build
+        run: ./gradlew build
+
+      - name: Locate artifact
+        id: artifact
+        shell: bash
+        run: |
+          mapfile -t jars < <(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
+          if (( ${#jars[@]} != 1 )); then
+            echo "Expected exactly one distributable jar, found ${#jars[@]}" >&2
+            exit 1
+          fi
+          echo "path=${jars[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload commit artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: voxy-${{ github.sha }}
+          path: ${{ steps.artifact.outputs.path }}
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+          archive: false
+
+      - name: Update latest development release
+        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: latest-build
+        run: |
+          cp "${{ steps.artifact.outputs.path }}" voxy-latest.jar
+          notes="Built from [\`${GITHUB_SHA}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) by [GitHub Actions](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            previous_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" --jq '.object.sha')
+            comparison=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${previous_sha}...${GITHUB_SHA}" --jq '.status')
+            if [[ "$comparison" == behind ]]; then
+              echo "A newer successful build is already published; leaving it unchanged."
+              exit 0
+            fi
+
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" \
+              -f sha="$GITHUB_SHA" -F force=true >/dev/null
+            gh release upload "$RELEASE_TAG" voxy-latest.jar --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title 'Latest development build' --notes "$notes" --prerelease --latest=false
+          else
+            gh release create "$RELEASE_TAG" voxy-latest.jar --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title 'Latest development build' \
+              --notes "$notes" --prerelease --latest=false
+          fi

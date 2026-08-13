@@ -1,7 +1,12 @@
-# Project exclude paths
-/.gradle/
-/.idea/
-/build/
-/run/
-/out/
-/logs/
+.DS_Store
+.gradle/
+.idea/
+.settings/
+.vscode/
+build/
+out/
+run/
+logs/
+*.iml
+*.ipr
+*.iws
