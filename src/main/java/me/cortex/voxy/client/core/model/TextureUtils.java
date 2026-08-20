@@ -41,34 +41,6 @@ public class TextureUtils {
         throw new IllegalArgumentException();
     }
 
-
-    public static boolean hasTranslucentPixel(ColourDepthTextureData data) {
-        for (int i = 0; i < data.colour().length; i++) {
-            int alpha = data.colour()[i]>>>24;
-            int depth = data.depth()[i];
-            if ((depth&0xFF)!=0) {//only check on written pixels
-                if (alpha!=0&&alpha!=255) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    public static boolean isSolidWhereDrawn(ColourDepthTextureData data) {
-        for (int i = 0; i < data.colour().length; i++) {
-            int alpha = data.colour()[i]>>>24;
-            int depth = data.depth()[i];
-            if ((depth&0xFF)!=0) {//only check on written pixels
-                if (alpha!=255) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-
     //0: nothing written
     //1: none tinted
     //2: some tinted

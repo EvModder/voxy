@@ -168,16 +168,13 @@ void main() {
     }
 
 
-    //Also, small quad is really fking over the mipping level somehow
+    //Keep cutout masks exact while allowing translucent mipmaps to preserve partial coverage.
     #ifndef TRANSLUCENT
     colour.a = 1.0f;
     if (useDiscard() && (textureLod(blockModelAtlas, texPos, 0).a <= 0.1f)) {
-    //if (useDiscard() && (colour.a <= 0.1f)) {
     #else
-    if (textureLod(blockModelAtlas, texPos, 0).a == 0.0f) {
+    if (colour.a == 0.0f) {
     #endif
-        //This is stupidly stupidly bad for divergence
-        //TODO: FIXME, basicly what this do is sample the exact pixel (no lod) for discarding, this stops mipmapping fucking it over
         #ifndef DEBUG_RENDER
         discard;
         return;
@@ -254,4 +251,3 @@ colour = textureGrad(blockModelAtlas, texPos, dx, dy);
 
 //Undefine the depth stuff
 #import <voxy:util/depthutils.glsl>
-

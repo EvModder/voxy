@@ -6,13 +6,13 @@ vec3 swizzelDataAxis(uint axis, vec3 data) {
     return mix(mix(data.zxy,data.xzy,bvec3(axis==0)),data,bvec3(axis==1));
 }
 
-vec4 getFaceSize(uint faceData) {
-    float EPSILON = 0.00005f;
+vec4 getFaceSize(uint faceData, bool isTranslucent) {
+    float epsilon = isTranslucent ? 0.0f : 0.00005f;
 
     vec4 faceOffsetsSizes = extractFaceSizes(faceData);
 
     //Expand the quads by a very small amount (because of the subtraction after this also becomes an implicit add)
-    faceOffsetsSizes.xz -= vec2(EPSILON);
+    faceOffsetsSizes.xz -= vec2(epsilon);
 
     //Make the end relative to the start
     faceOffsetsSizes.yw -= faceOffsetsSizes.xz;
@@ -131,7 +131,7 @@ void setupQuad(out QuadData quad, const in Quad rawQuad, uvec2 sPos, bool genera
         quad.attributeData.yzw = makeRemainingAttributes(model, rawQuad, lodLevel, face);
     }
 
-    vec4 faceSize = getFaceSize(faceData);
+    vec4 faceSize = getFaceSize(faceData, modelIsTranslucent(model));
     #ifdef USE_SINGLE_TRI
     faceSize *= 2;
     #endif
