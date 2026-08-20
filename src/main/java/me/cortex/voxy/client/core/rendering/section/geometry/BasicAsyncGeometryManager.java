@@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import me.cortex.voxy.client.core.rendering.building.BuiltSection;
+import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.AllocationArena;
 import me.cortex.voxy.common.util.HierarchicalBitSet;
 import me.cortex.voxy.common.util.MemoryBuffer;
@@ -29,6 +30,8 @@ public class BasicAsyncGeometryManager implements IGeometryManager {
     private final Int2ObjectOpenHashMap<MemoryBuffer> heapUploads = new Int2ObjectOpenHashMap<>(1024);//Uploads into the buffer at the given location
     private final IntOpenHashSet heapRemoveUploads = new IntOpenHashSet(1024);//Any removals are added here, so that it can be properly synced
     private long usedCapacity = 0;
+    private long lastCapacityWarning;
+    private int rejectedAllocations;
 
     public BasicAsyncGeometryManager(int maxSectionCount, long geometryCapacity) {
         this.allocationSet = new HierarchicalBitSet(maxSectionCount);
@@ -47,13 +50,16 @@ public class BasicAsyncGeometryManager implements IGeometryManager {
             throw new IllegalArgumentException("sectionData is empty, cannot upload nothing");
         }
 
-        //Free the old id and replace it with a new one
-        // if oldId is -1, then treat it as not previously existing
-
-        //Free the old data if oldId is supplied
         if (oldId != -1) {
-            //Its here just for future optimization potential
-            this.removeSection(oldId);
+            if (!this.allocationSet.isSet(oldId)) {
+                throw new IllegalStateException("Id was not already allocated. id: " + oldId);
+            }
+            var oldMeta = this.sectionMetadata.get(oldId);
+            var newMeta = this.createReplacementMeta(oldMeta, section);
+            if (newMeta == null) return OUT_OF_CAPACITY;
+            this.sectionMetadata.set(oldId, newMeta);
+            this.invalidatedIds.add(oldId);
+            return oldId;
         }
 
         int newId =  this.allocationSet.allocateNext();
@@ -71,6 +77,10 @@ public class BasicAsyncGeometryManager implements IGeometryManager {
         }
 
         var newMeta = this.createMeta(section);
+        if (newMeta == null) {
+            if (!this.allocationSet.free(newId)) throw new IllegalStateException();
+            return OUT_OF_CAPACITY;
+        }
 
         if (newId == this.sectionMetadata.size()) {
             this.sectionMetadata.add(newMeta);
@@ -93,36 +103,80 @@ public class BasicAsyncGeometryManager implements IGeometryManager {
             throw new IllegalStateException("Id was not already allocated. id: " + id);
         }
         var oldMetadata = this.sectionMetadata.set(id, null);
-        int ptr = oldMetadata.geometryPtr;
-        //Free from the heap
-        this.usedCapacity -= this.allocationHeap.free(Integer.toUnsignedLong(ptr));
-        //Free the upload if it was uploading
-        var buf = this.heapUploads.remove(ptr);
-        if (buf != null) {
-            buf.free();
-        }
-        this.heapRemoveUploads.add(ptr);
+        this.removeGeometry(oldMetadata.geometryPtr);
         this.invalidatedIds.add(id);
     }
 
     private SectionMeta createMeta(BuiltSection section) {
         if ((section.geometryBuffer.size%GEOMETRY_ELEMENT_SIZE)!=0) throw new IllegalStateException();
         int size = (int) (section.geometryBuffer.size/GEOMETRY_ELEMENT_SIZE);
-        //clamp size upwards to ranges of 127
-        int upsized = (size+127)&~127;
-        //Address
+        int upsized = allocationSize(size);
         int addr = (int)this.allocationHeap.alloc(upsized);
         if (addr == -1) {
-            throw new IllegalStateException("Geometry OOM. requested allocation size (in elements): " + size + ", Heap size at top remaining: " + (this.allocationHeap.getLimit()-this.allocationHeap.getSize()) + ", used elements: " + this.usedCapacity);
+            this.logRejectedAllocation(upsized);
+            return null;
         }
         this.usedCapacity += upsized;
-        //Create upload
-        if (this.heapUploads.put(addr, section.geometryBuffer) != null) {
-            throw new IllegalStateException("Addr: " + addr);
-        }
-        this.heapRemoveUploads.remove(addr);
-        //Create Meta
+        this.setUpload(addr, section.geometryBuffer);
         return new SectionMeta(section.position, section.aabb, addr, size, section.offsets, section.childExistence);
+    }
+
+    private SectionMeta createReplacementMeta(SectionMeta oldMeta, BuiltSection section) {
+        if ((section.geometryBuffer.size%GEOMETRY_ELEMENT_SIZE)!=0) throw new IllegalStateException();
+        int size = (int) (section.geometryBuffer.size/GEOMETRY_ELEMENT_SIZE);
+        int requiredSize = allocationSize(size);
+        int oldSize = (int) this.allocationHeap.getSize(Integer.toUnsignedLong(oldMeta.geometryPtr));
+        int addr = oldMeta.geometryPtr;
+
+        if (requiredSize <= oldSize) {
+            this.usedCapacity -= this.allocationHeap.shrink(Integer.toUnsignedLong(addr), requiredSize);
+        } else if (this.allocationHeap.expand(Integer.toUnsignedLong(addr), requiredSize-oldSize)) {
+            this.usedCapacity += requiredSize-oldSize;
+        } else {
+            addr = (int) this.allocationHeap.alloc(requiredSize);
+            if (addr == -1) {
+                this.logRejectedAllocation(requiredSize);
+                return null;
+            }
+            this.usedCapacity += requiredSize;
+            this.removeGeometry(oldMeta.geometryPtr);
+        }
+
+        this.setUpload(addr, section.geometryBuffer);
+        return new SectionMeta(section.position, section.aabb, addr, size, section.offsets, section.childExistence);
+    }
+
+    private static int allocationSize(int size) {
+        //Clamp size upwards to ranges of 128 elements.
+        return (size+127)&~127;
+    }
+
+    private void setUpload(int addr, MemoryBuffer upload) {
+        var previous = this.heapUploads.put(addr, upload);
+        if (previous != null && previous != upload) previous.free();
+        this.heapRemoveUploads.remove(addr);
+    }
+
+    private void removeGeometry(int ptr) {
+        this.usedCapacity -= this.allocationHeap.free(Integer.toUnsignedLong(ptr));
+        var upload = this.heapUploads.remove(ptr);
+        if (upload != null) upload.free();
+        this.heapRemoveUploads.add(ptr);
+    }
+
+    private void logRejectedAllocation(int requestedSize) {
+        this.rejectedAllocations++;
+        long now = System.nanoTime();
+        if (this.lastCapacityWarning != 0 && now-this.lastCapacityWarning < 10_000_000_000L) return;
+
+        long topRemaining = this.allocationHeap.getLimit()-this.allocationHeap.getSize();
+        long largestBlock = Math.max(topRemaining, this.allocationHeap.getLargestFreeBlockSize());
+        long free = this.allocationHeap.getLimit()-this.usedCapacity;
+        String state = free >= requestedSize ? "fragmented" : "full";
+        Logger.warn("Geometry arena is", state, "and cannot fit", requestedSize*GEOMETRY_ELEMENT_SIZE, "bytes; free:", free*GEOMETRY_ELEMENT_SIZE,
+                "largest contiguous block:", largestBlock*GEOMETRY_ELEMENT_SIZE, "rejecting one LoD geometry update; rejected since last warning:", this.rejectedAllocations);
+        this.rejectedAllocations = 0;
+        this.lastCapacityWarning = now;
     }
 
     @Override

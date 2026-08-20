@@ -54,6 +54,10 @@ public class AllocationArena {
         return (int) (slot>>ADDR_BITS);
     }
 
+    public int getLargestFreeBlockSize() {
+        return this.FREE.isEmpty() ? 0 : (int) (this.FREE.lastLong()>>>ADDR_BITS);
+    }
+
     /*
     public long allocFromLargest(int size) {//Allocates from the largest avalible block, this is useful for expanding later on
 
@@ -139,6 +143,24 @@ public class AllocationArena {
         slot = (slot>>>SIZE_BITS) | (slot<<ADDR_BITS);
         this.FREE.add(slot);//Add the free slot into segments
         return (int) size;
+    }
+
+    public int shrink(long addr, int size) {
+        if (size <= 0) throw new IllegalArgumentException();
+        addr &= ADDR_MSK;
+        long oldSize = this.getSize(addr);
+        if (size > oldSize) throw new IllegalArgumentException();
+        if (size == oldSize) return 0;
+
+        var iter = this.TAKEN.iterator(addr<<SIZE_BITS);
+        long slot = iter.nextLong();
+        iter.remove();
+
+        int released = (int) (oldSize-size);
+        this.TAKEN.add((addr<<SIZE_BITS)|size);
+        this.TAKEN.add(((addr+size)<<SIZE_BITS)|released);
+        if (this.free(addr+size) != released) throw new IllegalStateException();
+        return released;
     }
 
 

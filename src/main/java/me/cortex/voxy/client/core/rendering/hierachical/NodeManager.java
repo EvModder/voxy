@@ -262,25 +262,20 @@ public class NodeManager {
             return EMPTY_GEOMETRY_ID;
         }
         if (meshId != NULL_GEOMETRY_ID && meshId != EMPTY_GEOMETRY_ID) {
-            return this.geometryManager.uploadReplaceSection(meshId, section);
+            int result = this.geometryManager.uploadReplaceSection(meshId, section);
+            if (result != IGeometryManager.OUT_OF_CAPACITY) return result;
+            section.free();
+            return meshId;
         }
-        return this.geometryManager.uploadSection(section);
+        int result = this.geometryManager.uploadSection(section);
+        if (result != IGeometryManager.OUT_OF_CAPACITY) return result;
+        section.free();
+        return EMPTY_GEOMETRY_ID;
     }
 
     private int updateNodeGeometry(int node, BuiltSection geometry) {
         int previousGeometry = this.nodeData.getNodeGeometry(node);
-        int newGeometry = EMPTY_GEOMETRY_ID;
-        if (previousGeometry != EMPTY_GEOMETRY_ID && previousGeometry != NULL_GEOMETRY_ID) {
-            if (!geometry.isEmpty()) {
-                newGeometry = this.geometryManager.uploadReplaceSection(previousGeometry, geometry);
-            } else {
-                this.geometryManager.removeSection(previousGeometry);
-            }
-        } else {
-            if (!geometry.isEmpty()) {
-                newGeometry = this.geometryManager.uploadSection(geometry);
-            }
-        }
+        int newGeometry = this.uploadReplaceSection(previousGeometry, geometry);
 
         if (previousGeometry != newGeometry) {
             this.nodeData.setNodeGeometry(node, newGeometry);

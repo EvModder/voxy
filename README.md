@@ -11,6 +11,7 @@ A fork of [MCRcortex/voxy](https://github.com/MCRcortex/voxy) for Minecraft 26.2
 - Prevents pending Vulkan readbacks from running after their consumers shut down.
 - Prevents partial-height block faces from incorrectly occluding adjacent terrain.
 - Corrects clear-glass mipmapping and prevents translucent LoD face overlap.
+- Keeps geometry-capacity pressure recoverable and reduces allocator fragmentation.
 - Preserves dirty section data for retry after failed storage writes.
 - Keeps uniform LoD sections compact until per-voxel storage is required.
 - Adds a concurrent SQLite storage backend for sharing one LoD database across client processes.
