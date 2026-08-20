@@ -105,8 +105,38 @@ public class WorldUpdater {
 
         //TODO: remove the nonAirCountDelta stuff if level != 0
 
+        long[] existing = worldSection._rawOrNull();
+        if (existing == null) {
+            long uniform = worldSection.getUniformValue();
+            boolean allSame = true;
+            if (lvl == 0) {
+                for (int i = 0; i <= 0xFFF; i++) {
+                    if (vdat[i] != uniform) {
+                        allSame = false;
+                        break;
+                    }
+                }
+            } else {
+                int baseVIdx = VoxelizedSection.getBaseIndexForLevel(lvl);
+                int endVIdx = (0xFFF >> (lvl * 3)) + baseVIdx;
+                for (int i = baseVIdx; i <= endVIdx; i++) {
+                    if (vdat[i] != uniform) {
+                        allSame = false;
+                        break;
+                    }
+                }
+            }
+            if (allSame) {
+                long status = 0;
+                if (lvl == 0 && Mapper.isAir(uniform)) {
+                    status |= Integer.toUnsignedLong(4096) << 1;
+                }
+                return status;
+            }
+        }
+
         {//Do a bunch of funny math
-            var secD = worldSection.data;
+            var secD = worldSection.materialize();
             int baseSec = bx | (bz << 5) | (by << 10);
             if (lvl == 0) {
                 final int secMsk = 0b1100|(0xf << 5) | (0xf << 10);

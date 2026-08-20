@@ -107,7 +107,15 @@ public class RenderGenerationService {
     private void computeAndRequestRequiredModels(IntOpenHashSet seenMissedIds, WorldSection section) {
         //Know this is... very much not safe, however it reduces allocation rates and other garbage, am sure its "fine"
         final var factory = this.modelBakery.factory;
-        for (long state : section._unsafeGetRawDataArray()) {
+        long[] raw = section._rawOrNull();
+        if (raw == null) {
+            int block = Mapper.getBlockId(section.getUniformValue());
+            if (block != 0 && !factory.hasModelForBlockId(block) && seenMissedIds.add(block)) {
+                this.modelBakery.requestBlockBake(block);
+            }
+            return;
+        }
+        for (long state : raw) {
             int block = Mapper.getBlockId(state);
             if (block != 0 && !factory.hasModelForBlockId(block)) {
                 if (seenMissedIds.add(block)) {

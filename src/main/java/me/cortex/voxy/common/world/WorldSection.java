@@ -1,6 +1,7 @@
 package me.cortex.voxy.common.world;
 
 
+import me.cortex.voxy.common.world.other.Mapper;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 
 import java.lang.invoke.MethodHandles;
@@ -21,9 +22,11 @@ public final class WorldSection {
     private static final VarHandle NON_EMPTY_BLOCK_HANDLE;
     private static final VarHandle IN_SAVE_QUEUE_HANDLE;
     private static final VarHandle IS_DIRTY_HANDLE;
+    private static final VarHandle DATA_HANDLE;
 
     static {
         try {
+            DATA_HANDLE = MethodHandles.lookup().findVarHandle(WorldSection.class, "data", long[].class);
             ATOMIC_STATE_HANDLE = MethodHandles.lookup().findVarHandle(WorldSection.class, "atomicState", int.class);
             NON_EMPTY_CHILD_HANDLE = MethodHandles.lookup().findVarHandle(WorldSection.class, "nonEmptyChildren", byte.class);
             NON_EMPTY_BLOCK_HANDLE = MethodHandles.lookup().findVarHandle(WorldSection.class, "nonEmptyBlockCount", int.class);
@@ -51,7 +54,9 @@ public final class WorldSection {
 
     //Serialized states
     long metadata;
-    long[] data = null;
+    //Null data represents a section where every voxel has uniformValue.
+    volatile long[] data;
+    private volatile long uniformValue;
     volatile int nonEmptyBlockCount = 0;//Note: only needed for level 0 sections
     volatile byte nonEmptyChildren;
 
@@ -71,20 +76,67 @@ public final class WorldSection {
         this.key = WorldEngine.getWorldSectionId(lvl, x, y, z);
         this.tracker = tracker;
 
-        this.data = ARRAY_REUSE_CACHE.poll();
-        if (this.data == null) {
-            this.data = new long[32 * 32 * 32];
-        } else {
-            ARRAY_REUSE_CACHE_COUNT.decrementAndGet();
-        }
+        this.uniformValue = Mapper.AIR;
     }
 
     void primeForReuse() {
         ATOMIC_STATE_HANDLE.set(this, 1);
     }
 
-    public long[] _unsafeGetRawDataArray() {
+    public boolean isUniform() {
+        return this.data == null;
+    }
+
+    public long getUniformValue() {
+        return this.uniformValue;
+    }
+
+    //Only valid while loading a section that has not yet been published.
+    void setUniform(long value) {
+        if (this.data != null) {
+            throw new IllegalStateException("Cannot make a materialized section uniform");
+        }
+        this.uniformValue = value;
+        DATA_HANDLE.setRelease(this, null);
+    }
+
+    public long get(int idx) {
+        long[] current = this.data;
+        return current == null ? this.uniformValue : current[idx];
+    }
+
+    //Returns null for compact uniform sections. Callers must not modify the result.
+    public long[] _rawOrNull() {
         return this.data;
+    }
+
+    //The fast path is lock-free. Synchronization is needed only for the one-way
+    //uniform-to-dense transition, avoiding duplicate allocations under contention.
+    public long[] materialize() {
+        long[] current = this.data;
+        if (current != null) {
+            return current;
+        }
+        synchronized (this) {
+            current = this.data;
+            if (current != null) {
+                return current;
+            }
+
+            current = ARRAY_REUSE_CACHE.poll();
+            if (current == null) {
+                current = new long[SECTION_VOLUME];
+            } else {
+                ARRAY_REUSE_CACHE_COUNT.decrementAndGet();
+            }
+            Arrays.fill(current, this.uniformValue);
+            DATA_HANDLE.setRelease(this, current);
+            return current;
+        }
+    }
+
+    public long[] _unsafeGetRawDataArray() {
+        return this.materialize();
     }
 
     @Override
@@ -177,11 +229,12 @@ public final class WorldSection {
     }
 
     void _releaseArray() {
-        if (VERIFY_WORLD_SECTION_EXECUTION && this.data == null) {
-            throw new IllegalStateException();
+        long[] current = this.data;
+        if (current == null) {
+            return;
         }
         if (ARRAY_REUSE_CACHE_COUNT.get() < ARRAY_REUSE_CACHE_SIZE) {
-            ARRAY_REUSE_CACHE.add(this.data);
+            ARRAY_REUSE_CACHE.add(current);
             ARRAY_REUSE_CACHE_COUNT.incrementAndGet();
         }
         this.data = null;
@@ -209,15 +262,25 @@ public final class WorldSection {
     public long set(int x, int y, int z, long id) {
         //TODO: this needs to update the block counts
         int idx = getIndex(x,y,z);
-        long old = this.data[idx];
-        this.data[idx] = id;
+        long[] current = this.data;
+        if (current == null) {
+            long old = this.uniformValue;
+            if (old == id) {
+                return old;
+            }
+            current = this.materialize();
+        }
+        long old = current[idx];
+        current[idx] = id;
         return old;
     }
 
     //Generates a copy of the data array, this is to help with atomic operations like rendering
     public long[] copyData() {
         this.assertNotFree();
-        return Arrays.copyOf(this.data, this.data.length);
+        long[] copy = new long[SECTION_VOLUME];
+        this.copyDataTo(copy);
+        return copy;
     }
 
     public void copyDataTo(long[] cache) {
@@ -226,8 +289,13 @@ public final class WorldSection {
 
     public void copyDataTo(long[] cache, int dstOffset) {
         this.assertNotFree();
-        if ((cache.length-dstOffset) < this.data.length) throw new IllegalArgumentException();
-        System.arraycopy(this.data, 0, cache, dstOffset, this.data.length);
+        if ((cache.length-dstOffset) < SECTION_VOLUME) throw new IllegalArgumentException();
+        long[] current = this.data;
+        if (current == null) {
+            Arrays.fill(cache, dstOffset, dstOffset + SECTION_VOLUME, this.uniformValue);
+        } else {
+            System.arraycopy(current, 0, cache, dstOffset, SECTION_VOLUME);
+        }
     }
 
     public static int getChildIndex(int x, int y, int z) {

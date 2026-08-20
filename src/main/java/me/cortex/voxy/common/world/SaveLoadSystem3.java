@@ -9,6 +9,9 @@ import org.lwjgl.system.MemoryUtil;
 
 public class SaveLoadSystem3 {
     public static final int STORAGE_VERSION = 0;
+    private static final long HEADER_SIZE = Long.BYTES * 2L;
+    private static final long BLOCK_INDEX_SIZE = WorldSection.SECTION_VOLUME * Short.BYTES;
+    private static final long LUT_OFFSET = HEADER_SIZE + BLOCK_INDEX_SIZE;
 
     private record SerializationCache(Long2ShortOpenHashMap lutMapCache, MemoryBuffer memoryBuffer) {
         public SerializationCache() {
@@ -37,7 +40,7 @@ public class SaveLoadSystem3 {
     //TODO: Cache like long2short and the short and other data to stop allocs
     public static MemoryBuffer serialize(WorldSection section) {
         var cache = CACHE.get();
-        var data = section.data;
+        var data = section._rawOrNull();
 
         Long2ShortOpenHashMap LUT = cache.lutMapCache; LUT.clear();
 
@@ -46,6 +49,19 @@ public class SaveLoadSystem3 {
 
         MemoryUtil.memPutLong(ptr, section.key); ptr += 8;
         long metadataPtr = ptr; ptr += 8;
+
+        if (data == null) {
+            long blockPtr = ptr;
+            ptr += WorldSection.SECTION_VOLUME*2;
+            MemoryUtil.memSet(blockPtr, 0, WorldSection.SECTION_VOLUME*2);
+            MemoryUtil.memPutLong(ptr, section.getUniformValue());
+            ptr += 8;
+
+            long metadata = 1;
+            metadata |= Byte.toUnsignedLong(section.getNonEmptyChildren())<<16;
+            MemoryUtil.memPutLong(metadataPtr, metadata);
+            return buffer.subSize(ptr-buffer.address);
+        }
 
         long blockPtr = ptr; ptr += WorldSection.SECTION_VOLUME*2;
         long prev = data[0]; MemoryUtil.memPutLong(ptr, prev); ptr+=8; LUT.put(prev, (short) 0);
@@ -78,23 +94,53 @@ public class SaveLoadSystem3 {
     }
 
     public static boolean deserialize(WorldSection section, MemoryBuffer data) {
+        if (data.size < LUT_OFFSET) {
+            return invalid(section, "data is truncated");
+        }
+
         long ptr = data.address;
         long key = MemoryUtil.memGetLong(ptr); ptr += 8;
 
         if (section.key != key) {
-            //throw new IllegalStateException("Decompressed section not the same as requested. got: " + key + " expected: " + section.key);
-            Logger.error("Decompressed section not the same as requested. got: " + key + " expected: " + section.key);
-            return false;
+            return invalid(section, "stored key " + key + " does not match requested key " + section.key);
         }
 
         final long metadata = MemoryUtil.memGetLong(ptr); ptr += 8;
-        section.nonEmptyChildren = (byte) ((metadata>>>16)&0xFF);
-        final long lutBasePtr = ptr + WorldSection.SECTION_VOLUME * 2;
+        final int lutSize = (int) (metadata & 0xFFFF);
+        if (lutSize < 1 || lutSize > WorldSection.SECTION_VOLUME) {
+            return invalid(section, "invalid LUT size " + lutSize);
+        }
 
-        final var blockData = section.data;
+        long requiredSize = LUT_OFFSET + lutSize * Long.BYTES;
+        if (data.size < requiredSize) {
+            return invalid(section, "LUT data is truncated");
+        }
+
+        long indexPtr = ptr;
+        for (int i = 0; i < WorldSection.SECTION_VOLUME; i++) {
+            int mapping = Short.toUnsignedInt(MemoryUtil.memGetShort(indexPtr + i * Short.BYTES));
+            if (mapping >= lutSize) {
+                return invalid(section, "voxel " + i + " references LUT index " + mapping + " of " + lutSize);
+            }
+        }
+
+        final byte nonEmptyChildren = (byte) ((metadata>>>16)&0xFF);
+        final long lutBasePtr = data.address + LUT_OFFSET;
+        if (lutSize == 1) {
+            long value = MemoryUtil.memGetLong(lutBasePtr);
+            section.setUniform(value);
+            section.nonEmptyChildren = nonEmptyChildren;
+            if (section.lvl == 0) {
+                section.nonEmptyBlockCount = Mapper.isAir(value) ? 0 : WorldSection.SECTION_VOLUME;
+            }
+            return true;
+        }
+
+        final var blockData = section.materialize();
         for (int i = 0; i < WorldSection.SECTION_VOLUME; i++) {
             blockData[i] = MemoryUtil.memGetLong(lutBasePtr + Short.toUnsignedLong(MemoryUtil.memGetShort(ptr)) * 8L);ptr += 2;
         }
+        section.nonEmptyChildren = nonEmptyChildren;
 
         if (section.lvl == 0) {
             int emptyBlockCount = 0;
@@ -104,7 +150,11 @@ public class SaveLoadSystem3 {
             section.nonEmptyBlockCount = WorldSection.SECTION_VOLUME-emptyBlockCount;
         }
 
-        ptr = lutBasePtr + (metadata & 0xFFFF) * 8L;
         return true;
+    }
+
+    private static boolean invalid(WorldSection section, String reason) {
+        Logger.error("Invalid serialized section " + WorldEngine.pprintPos(section.key) + ": " + reason);
+        return false;
     }
 }

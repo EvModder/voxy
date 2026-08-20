@@ -8,13 +8,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.StampedLock;
 
 public final class ActiveSectionTracker {
 
-    //Deserialize into the supplied section, returns true on success, false on failure
+    //Deserialize into the supplied section: 0 means loaded, 1 absent, and negative invalid.
     public interface SectionLoader {int load(WorldSection section);}
 
     //Loaded section world cache, TODO: get rid of VolatileHolder and use something more sane
@@ -147,18 +146,17 @@ public final class ActiveSectionTracker {
                 status = this.loader.load(section);
 
                 if (status < 0) {
-                    //TODO: Instead if throwing an exception do something better, like attempting to regen
-                    //throw new IllegalStateException("Unable to load section: ");
-                    Logger.error("Unable to load section " + section.key + " setting to air");
+                    //TODO: attempt to regenerate failed sections from available children before falling back to air
+                    Logger.error("Unable to load section " + section.key + "; using sky-lit air as fallback");
                     status = 1;
                 }
 
-                //TODO: REWRITE THE section tracker _again_ to not be so shit and jank, and so that Arrays.fill is not 10% of the execution time
+                //TODO: rewrite this section tracker load/publish path; compact sections only resolve the dense air fill cost
                 if (status == 1) {
-                    //We need to set the data to air as it is undefined state
+                    //Missing and failed loads are undefined and must be initialized to sky-lit air
                     int sky = 15;
                     int block = 0;
-                    Arrays.fill(section.data, Mapper.composeMappingId((byte) (sky|(block<<4)),0,0));
+                    section.setUniform(Mapper.composeMappingId((byte) (sky|(block<<4)),0,0));
                 }
                 section.acquire(1);
             }

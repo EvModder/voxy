@@ -1,17 +1,14 @@
 package me.cortex.voxy.common.config.section;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.config.ConfigBuildCtx;
 import me.cortex.voxy.common.config.storage.StorageBackend;
 import me.cortex.voxy.common.config.storage.StorageConfig;
 import me.cortex.voxy.common.util.ThreadLocalMemoryBuffer;
 import me.cortex.voxy.common.world.SaveLoadSystem3;
 import me.cortex.voxy.common.world.WorldSection;
-import me.cortex.voxy.common.world.other.Mapper;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.function.IntFunction;
 import java.util.function.LongConsumer;
 
@@ -27,22 +24,21 @@ public class SectionSerializationStorage extends SectionStorage {
 
     public int loadSection(WorldSection into) {
         var data = this.backend.getSectionData(into.key, MEMORY_CACHE.get().createUntrackedUnfreeableReference());
-        if (data != null) {
-            if (!SaveLoadSystem3.deserialize(into, data)) {
-                this.backend.deleteSectionData(into.key);
-                //TODO: regenerate the section from children
-                Arrays.fill(into._unsafeGetRawDataArray(), Mapper.AIR);
-                Logger.error("Section " + into.lvl + ", " + into.x + ", " + into.y + ", " + into.z + " was unable to load, removing");
-                return -1;
-            } else {
-                return 0;
-            }
-        } else {
+        if (data == null) {
             //TODO: if we need to fetch an lod from a server, send the request here and block until the request is finished
             // the response should be put into the local db so that future data can just use that
             // the server can also send arbitrary updates to the client for arbitrary lods
             return 1;
         }
+        if (SaveLoadSystem3.deserialize(into, data)) {
+            return 0;
+        }
+
+        this.backend.deleteSectionData(into.key);
+        //TODO: regenerate invalid higher-level LoD sections from their children
+        //The deserializer logs the reason; the tracker substitutes sky-lit air and later
+        //source ingestion can rebuild the deleted section.
+        return -1;
     }
 
 
