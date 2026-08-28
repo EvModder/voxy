@@ -15,7 +15,7 @@ A fork of [MCRcortex/voxy](https://github.com/MCRcortex/voxy) for Minecraft 26.2
 - Coalesces repeated renderer reloads within the same Minecraft frame.
 - Preserves dirty section data for retry after failed storage writes.
 - Keeps uniform LoD sections compact until per-voxel storage is required.
-- Adds a concurrent SQLite storage backend for sharing one LoD database across client processes.
+- Adds a concurrent LMDB backend for sharing LoD databases across client processes.
 - Maps saved server names and proxy addresses to stable storage aliases.
 - Builds every pushed commit as a 90-day GitHub Actions artifact, and retains the latest successful `dev` build.
 

@@ -289,4 +289,6 @@ processIncludeJars {
 
 test {
     useJUnitPlatform()
+    systemProperty 'org.lwjgl.system.SharedLibraryExtractPath',
+            layout.buildDirectory.dir('tmp/lwjgl-natives').get().asFile.absolutePath
 }
