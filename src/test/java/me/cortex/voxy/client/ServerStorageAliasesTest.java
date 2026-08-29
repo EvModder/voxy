@@ -25,13 +25,12 @@ final class ServerStorageAliasesTest {
                 gameDirectory, "Example server", "server.example:25565");
 
         assertEquals("server.example_25565", resolution.storageKey());
-        assertFalse(resolution.sharedStorage());
         assertTrue(Files.readString(gameDirectory.resolve(".voxy/server_aliases.json"))
                 .contains("\"aliases\": []"));
     }
 
     @Test
-    void honorsUserDefinedAddressPatterns(@TempDir Path gameDirectory) throws Exception {
+    void ignoresLegacySharedStorageFlagWhenResolvingAddressPatterns(@TempDir Path gameDirectory) throws Exception {
         Path configDirectory = gameDirectory.resolve(".voxy");
         Files.createDirectories(configDirectory);
         Files.writeString(configDirectory.resolve("server_aliases.json"), """
@@ -40,7 +39,7 @@ final class ServerStorageAliasesTest {
                   "aliases": [
                     {
                       "logicalServer": "shared.example",
-                      "sharedStorage": true,
+                      "sharedStorage": false,
                       "serverNamePatterns": [],
                       "addressPatterns": ["198.51.100.10:*"]
                     }
@@ -52,6 +51,5 @@ final class ServerStorageAliasesTest {
                 gameDirectory, "Example proxy", "198.51.100.10:25565");
 
         assertEquals("shared.example", resolution.storageKey());
-        assertTrue(resolution.sharedStorage());
     }
 }

@@ -26,6 +26,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -45,6 +46,7 @@ public final class LMDBStorageBackend extends StorageBackend {
     private static final int NEXT_BIOME_ID_KEY = 3;
     private static final long DEFAULT_MAP_SIZE_BYTES = 16L << 30;
     private static final long MINIMUM_MAP_GROWTH_BYTES = 1L << 30;
+    public static final String DEFAULT_DIRECTORY_NAME = "voxy-lmdb";
     private static final Object ENVIRONMENT_REGISTRY_LOCK = new Object();
     private static final Map<Path, SharedEnvironment> OPEN_ENVIRONMENTS = new HashMap<>();
     private static final ThreadLocal<MessageDigest> IDENTITY_DIGEST = ThreadLocal.withInitial(() -> {
@@ -265,6 +267,80 @@ public final class LMDBStorageBackend extends StorageBackend {
     long getMapSize() {
         ensureOpen();
         return this.environment.getMapSize();
+    }
+
+    void importMappings(Map<Integer, byte[]> mappings) {
+        ensureOpen();
+        this.environment.write((transaction, stack) -> {
+            long cursor = openCursor(transaction, this.environment.idMappingDatabase, stack);
+            try {
+                MDBVal key = MDBVal.calloc(stack);
+                MDBVal value = MDBVal.calloc(stack);
+                int status = mdb_cursor_get(cursor, key, value, MDB_FIRST);
+                if (status != MDB_NOTFOUND) {
+                    check(status);
+                    throw new IllegalStateException("LMDB migration destination already contains mappings");
+                }
+            } finally {
+                mdb_cursor_close(cursor);
+            }
+
+            long mappingVersion = requireMetadata(
+                    transaction, this.environment.metadataDatabase, MAPPING_VERSION_KEY, stack);
+            for (var entry : mappings.entrySet()) {
+                int stackPointer = stack.getPointer();
+                try {
+                    int mappingKey = entry.getKey();
+                    int entryType = mappingKey >>> 30;
+                    int entryId = mappingKey & ID_MASK;
+                    validateEntryType(entryType);
+                    byte[] serialized = entry.getValue();
+                    byte[] identity = MappingIdentity.fromSerializedMapping(serialized);
+                    byte[] identityHash = hashIdentity(entryType, identity);
+                    if (getCanonicalMappingId(transaction, identityHash, identity, stack) == null) {
+                        putCanonicalMapping(transaction, identityHash, identity, entryId, stack);
+                    }
+                    put(transaction, this.environment.idMappingDatabase,
+                            intBuffer(stack, mappingKey), byteBuffer(stack, serialized), stack);
+                    advanceNextMappingId(transaction, entryType, entryId, stack);
+                    mappingVersion++;
+                } finally {
+                    stack.setPointer(stackPointer);
+                }
+            }
+            putMetadata(transaction, this.environment.metadataDatabase,
+                    MAPPING_VERSION_KEY, mappingVersion, stack);
+            return null;
+        });
+    }
+
+    void importSectionBatch(List<SectionData> sections) {
+        ensureOpen();
+        if (sections.isEmpty()) {
+            return;
+        }
+        int largestValue = sections.stream().mapToInt(section -> section.data.length).max().orElseThrow();
+        ByteBuffer valueBuffer = MemoryUtil.memAlloc(largestValue);
+        try {
+            this.environment.write((transaction, stack) -> {
+                for (SectionData section : sections) {
+                    int stackPointer = stack.getPointer();
+                    try {
+                        valueBuffer.clear().put(section.data).flip();
+                        put(transaction, this.environment.sectionDatabase,
+                                longBuffer(stack, section.key), valueBuffer, stack);
+                    } finally {
+                        stack.setPointer(stackPointer);
+                    }
+                }
+                return null;
+            });
+        } finally {
+            MemoryUtil.memFree(valueBuffer);
+        }
+    }
+
+    record SectionData(long key, byte[] data) {
     }
 
     private void ensureOpen() {
@@ -819,6 +895,14 @@ public final class LMDBStorageBackend extends StorageBackend {
 
     public static final class Config extends StorageConfig {
         public long initialMapSizeGiB = DEFAULT_MAP_SIZE_BYTES >> 30;
+        public String directoryName;
+
+        public Config() {
+        }
+
+        public Config(String directoryName) {
+            this.directoryName = directoryName;
+        }
 
         @Override
         public StorageBackend build(ConfigBuildCtx ctx) {
@@ -828,8 +912,11 @@ public final class LMDBStorageBackend extends StorageBackend {
             } catch (ArithmeticException exception) {
                 throw new IllegalArgumentException("LMDB map size is too large", exception);
             }
-            return new LMDBStorageBackend(
-                    ctx.ensurePathExists(ctx.substituteString(ctx.resolvePath())), initialMapSizeBytes);
+            Path storagePath = Path.of(ctx.substituteString(ctx.resolvePath()));
+            if (this.directoryName != null && !this.directoryName.isBlank()) {
+                storagePath = storagePath.resolve(this.directoryName);
+            }
+            return new LMDBStorageBackend(ctx.ensurePathExists(storagePath.toString()), initialMapSizeBytes);
         }
 
         public static String getConfigTypeName() {

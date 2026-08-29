@@ -24,7 +24,7 @@ public final class ServerStorageAliases {
     private ServerStorageAliases() {
     }
 
-    public record Resolution(String storageKey, boolean sharedStorage) {
+    public record Resolution(String storageKey) {
     }
 
     public static Resolution resolve(Path gameDirectory, String serverName, String serverAddress) {
@@ -39,7 +39,7 @@ public final class ServerStorageAliases {
                 try {
                     String storageKey = sanitizeStorageKey(alias.logicalServer);
                     Logger.info("Using logical server storage '" + storageKey + "' for " + serverAddress);
-                    return new Resolution(storageKey, alias.sharedStorage);
+                    return new Resolution(storageKey);
                 } catch (IllegalArgumentException exception) {
                     Logger.error("Ignoring invalid Voxy server alias", exception);
                 }
@@ -48,7 +48,7 @@ public final class ServerStorageAliases {
         String storageKey = serverAddress == null || serverAddress.isBlank()
                 ? "unknown_server"
                 : serverAddress.replace(':', '_');
-        return new Resolution(storageKey, false);
+        return new Resolution(storageKey);
     }
 
     static boolean wildcardMatches(String pattern, String value) {
@@ -155,7 +155,6 @@ public final class ServerStorageAliases {
 
     private static final class Alias {
         String logicalServer;
-        boolean sharedStorage;
         List<String> serverNamePatterns = new ArrayList<>();
         List<String> addressPatterns = new ArrayList<>();
     }
