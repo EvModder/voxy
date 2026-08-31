@@ -9,27 +9,43 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RendererReloadTrackerTest {
     @Test
-    void createsMissingRendererAndCoalescesSameFrameReload() {
+    void createsMissingRenderer() {
         var tracker = new RendererReloadTracker();
 
-        assertEquals(CREATE, tracker.onAllChanged(false, 10));
-        assertEquals(NONE, tracker.onAllChanged(true, 10));
+        assertEquals(CREATE, tracker.onAllChanged(false));
     }
 
     @Test
-    void reloadsOncePerFrame() {
+    void ignoresChunkOnlyRefreshes() {
         var tracker = new RendererReloadTracker();
 
-        assertEquals(RELOAD, tracker.onAllChanged(true, 10));
-        assertEquals(NONE, tracker.onAllChanged(true, 10));
-        assertEquals(RELOAD, tracker.onAllChanged(true, 11));
+        assertEquals(NONE, tracker.onAllChanged(true));
     }
 
     @Test
-    void missingRendererCanBeCreatedAgainWithinSameFrame() {
+    void reloadsOnceAfterResourceChange() {
         var tracker = new RendererReloadTracker();
+        tracker.onResourceManagerReload();
 
-        assertEquals(CREATE, tracker.onAllChanged(false, 10));
-        assertEquals(CREATE, tracker.onAllChanged(false, 10));
+        assertEquals(RELOAD, tracker.onAllChanged(true));
+        assertEquals(NONE, tracker.onAllChanged(true));
+    }
+
+    @Test
+    void newLevelUsesCurrentResourcesWithoutAnotherReload() {
+        var tracker = new RendererReloadTracker();
+        tracker.onResourceManagerReload();
+        tracker.onLevelChanged();
+
+        assertEquals(NONE, tracker.onAllChanged(true));
+    }
+
+    @Test
+    void creatingMissingRendererConsumesPendingResourceChange() {
+        var tracker = new RendererReloadTracker();
+        tracker.onResourceManagerReload();
+
+        assertEquals(CREATE, tracker.onAllChanged(false));
+        assertEquals(NONE, tracker.onAllChanged(true));
     }
 }

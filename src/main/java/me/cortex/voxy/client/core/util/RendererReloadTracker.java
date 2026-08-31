@@ -1,24 +1,23 @@
 package me.cortex.voxy.client.core.util;
 
 public final class RendererReloadTracker {
-    private static long currentFrame;
-    private long lastReloadFrame = Long.MIN_VALUE;
+    private boolean resourceReloadPending;
 
-    public static void advanceFrame() {
-        currentFrame++;
+    public void onResourceManagerReload() {
+        this.resourceReloadPending = true;
     }
 
-    public static long currentFrame() {
-        return currentFrame;
+    public void onLevelChanged() {
+        this.resourceReloadPending = false;
     }
 
-    public Action onAllChanged(boolean rendererPresent, long frame) {
+    public Action onAllChanged(boolean rendererPresent) {
         if (!rendererPresent) {
-            this.lastReloadFrame = frame;
+            this.resourceReloadPending = false;
             return Action.CREATE;
         }
-        if (this.lastReloadFrame == frame) return Action.NONE;
-        this.lastReloadFrame = frame;
+        if (!this.resourceReloadPending) return Action.NONE;
+        this.resourceReloadPending = false;
         return Action.RELOAD;
     }
 
