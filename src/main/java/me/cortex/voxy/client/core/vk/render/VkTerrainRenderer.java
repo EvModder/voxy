@@ -1,5 +1,6 @@
 package me.cortex.voxy.client.core.vk.render;
 
+import me.cortex.voxy.client.DebugEntries;
 import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
 import me.cortex.voxy.client.core.vk.VkBuffer;
@@ -336,15 +337,15 @@ public class VkTerrainRenderer {
             // here was redundant with that draw barrier and serialised the GPU.
         }
 
-        if (!this.ctx.vk().hasDrawIndirectCount) {
+        if (!this.ctx.vk().hasDrawIndirectCount || DebugEntries.isGpuDebugEnabled()) {
             //Read the three real per-pass draw counts back to the CPU so next frame's
-            // fixed-count multi-draws track them instead of the worst-case section
-            // cap (see fixedCountBudget). The counts live at opaque@12 / translucent@16
-            // / temporal@20 in drawCountCallBuffer; download those 12 bytes on the same
-            // async, event-retired path the traversal request readback already uses
-            // (commit() scopes its own COMPUTE->TRANSFER->HOST barriers). The callback
-            // runs on the render thread from pollRetired, so the plain field writes are
-            // race-free. Desktop (drawIndirectCount) neither needs nor issues this.
+            // fixed-count multi-draws track them instead of the worst-case section cap
+            // (see fixedCountBudget), or to expose them when Vulkan GPU diagnostics are
+            // enabled. The counts live at opaque@12 / translucent@16 / temporal@20 in
+            // drawCountCallBuffer; download those 12 bytes on the same async,
+            // event-retired path the traversal request readback already uses. The
+            // callback runs on the render thread from pollRetired, so the plain field
+            // writes are race-free. Desktop issues this only while diagnostics are on.
             this.downloadStream.download(viewport.drawCountCallBuffer, 12, 12, (ptr, size) -> {
                 this.fbOpaqueDraws = clampCount(MemoryUtil.memGetInt(ptr), VkViewport.OPAQUE_DRAW_COUNT);
                 this.fbTranslucentDraws = clampCount(MemoryUtil.memGetInt(ptr + 4), VkViewport.TRANSLUCENT_DRAW_COUNT);
@@ -352,6 +353,15 @@ public class VkTerrainRenderer {
                 this.hasAnyReadback = true;
             });
         }
+    }
+
+    public void addGpuDebugInfo(List<String> debug) {
+        if (!this.hasAnyReadback) {
+            debug.add("VK draws [opaque/translucent/temporal]: pending");
+            return;
+        }
+        debug.add("VK draws [opaque/translucent/temporal]: [" + this.fbOpaqueDraws + "/"
+                + this.fbTranslucentDraws + "/" + this.fbTemporalDraws + "]");
     }
 
     private static int clampCount(int value, int cap) {

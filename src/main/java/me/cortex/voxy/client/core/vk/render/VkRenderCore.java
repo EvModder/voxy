@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.vk.render;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import me.cortex.voxy.client.DebugEntries;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
@@ -240,6 +241,9 @@ public class VkRenderCore {
         this.renderGen.addDebugData(debug);
         this.nodeManager.addDebug(debug);
         this.ssao.addDebugInfo(debug);
+        if (DebugEntries.isGpuDebugEnabled()) {
+            this.terrainRenderer.addGpuDebugInfo(debug);
+        }
     }
 
     public void shutdown() {

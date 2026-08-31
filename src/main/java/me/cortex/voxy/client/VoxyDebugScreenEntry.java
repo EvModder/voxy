@@ -39,5 +39,10 @@ public class VoxyDebugScreenEntry implements DebugScreenEntry {
         }
     }
 
+    @Override
+    public boolean isAllowed(boolean reducedDebugInfo) {
+        return true;
+    }
+
 
 }
