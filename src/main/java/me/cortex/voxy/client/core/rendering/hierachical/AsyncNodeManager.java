@@ -29,6 +29,7 @@ import org.lwjgl.system.MemoryUtil;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
@@ -257,8 +258,18 @@ public class AsyncNodeManager {
             var job = this.geometryUpdateQueue.poll();
             if (job == null)
                 break;
-            workDone++;
-            this.manager.processGeometryResult(job);
+            var superseded = this.deferredGeometry.remove(job.position);
+            if (superseded != null) {
+                superseded.free();
+                workDone++;
+            }
+            if (this.manager.processGeometryResult(job)) {
+                workDone++;
+            } else {
+                //Keep only the newest mesh per position. Other uploads must still progress:
+                //the cleaner may need a parent mesh before it can evict its children.
+                this.deferredGeometry.put(job.position, job);
+            }
             if (job.geometryBuffer!=null) {
                 estimatedGeometryUploadAmount += job.geometryBuffer.size;
             }
@@ -310,6 +321,18 @@ public class AsyncNodeManager {
             job.free();
         } while (true);
 
+        int retryCount = Math.min(8, this.deferredGeometry.size());
+        for (int limit = 0; limit < retryCount; limit++) {
+            var entry = this.deferredGeometry.pollFirstEntry();
+            var mesh = entry.getValue();
+            if (this.manager.processGeometryResult(mesh)) {
+                workDone++;
+            } else {
+                this.deferredGeometry.putLast(entry.getKey(), mesh);
+            }
+        }
+        this.geometryAllocationBlocked = !this.deferredGeometry.isEmpty();
+        if (this.geometryAllocationBlocked) LockSupport.parkNanos(10_000_000L);
         if (this.workCounter.addAndGet(-workDone) < 0) {
             try {
                 Thread.sleep(1000);
@@ -577,6 +600,12 @@ public class AsyncNodeManager {
     }
 
     private long usedGeometryAmount = 0;
+    private volatile boolean geometryAllocationBlocked;
+    private final LinkedHashMap<Long, BuiltSection> deferredGeometry = new LinkedHashMap<>();
+
+    public boolean isGeometryAllocationBlocked() {
+        return this.geometryAllocationBlocked;
+    }
     public long getUsedGeometryCapacity() {
         return this.usedGeometryAmount;
     }
@@ -712,6 +741,8 @@ public class AsyncNodeManager {
             if (buffer == null) break;
             buffer.free();
         }
+        this.deferredGeometry.values().forEach(BuiltSection::free);
+        this.deferredGeometry.clear();
 
         while (true) {
             var section = this.childUpdateQueue.poll();

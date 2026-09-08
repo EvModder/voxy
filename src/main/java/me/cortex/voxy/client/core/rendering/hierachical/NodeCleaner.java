@@ -135,6 +135,7 @@ public class NodeCleaner implements INodeCleaner {
     }
 
     private boolean shouldCleanGeometry() {
+        if (this.nodeManager.isGeometryAllocationBlocked()) return true;
         if (false) {
             //If used more than 75% of geometry buffer
             long used = this.nodeManager.getUsedGeometryCapacity();

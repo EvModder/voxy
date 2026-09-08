@@ -122,7 +122,7 @@ public class VkNodeCleaner implements INodeCleaner {
 
     private boolean shouldCleanGeometry() {
         long remaining = this.nodeManager.getGeometryCapacity() - this.nodeManager.getUsedGeometryCapacity();
-        return remaining < 256_000_000;//If less than 256 mb free memory
+        return this.nodeManager.isGeometryAllocationBlocked() || remaining < 256_000_000;//Also clean fragmented arenas with ample total free space.
     }
 
     @Override

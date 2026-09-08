@@ -11,7 +11,7 @@ A fork of [MCRcortex/voxy](https://github.com/MCRcortex/voxy) for Minecraft 26.2
 - Prevents partial-height block faces from incorrectly occluding adjacent terrain.
 - Uses a closer LoD near plane for spectator and substituted camera views.
 - Corrects clear-glass mipmapping and prevents translucent LoD face overlap.
-- Keeps geometry-capacity pressure recoverable and reduces allocator fragmentation.
+- Retries blocked geometry uploads and triggers cleanup when fragmentation prevents allocation.
 - Preserves dirty section data for retry after failed storage writes.
 - Keeps uniform LoD sections compact until per-voxel storage is required.
 - Migrates from RocksDB to concurrent LMDB storage by default for LoD databases.

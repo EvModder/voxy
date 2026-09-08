@@ -47,10 +47,12 @@ public class RenderDataFactory {
 
     //TODO: emit directly to memory buffer instead of long arrays
 
-    //Each axis gets a max quad count of 2^16 (65536 quads) since that is the max the basic geometry manager can handle
-    private final MemoryBuffer quadBuffer = new MemoryBuffer(8*(8*(1<<16)));//6 faces + dual direction + translucents
+    //Each axis gets a max quad count of 2^16 - 1 (65535 quads), matching the geometry manager's packed 16-bit counts.
+    private static final int MAX_QUADS_PER_BUFFER = (1<<16)-1;
+    private final MemoryBuffer quadBuffer = new MemoryBuffer(8*(8*MAX_QUADS_PER_BUFFER));//6 faces + dual direction + translucents
     private final long quadBufferPtr = this.quadBuffer.address;
     private final int[] quadCounters = new int[8];
+    private int droppedQuads = 0;
 
 
     private int minX;
@@ -145,7 +147,15 @@ public class RenderDataFactory {
 
 
             int bufferIdx = type+(type==2?face:0);//Translucent, double side, directional
-            long bufferOffset = (RenderDataFactory.this.quadCounters[bufferIdx]++)*8L + bufferIdx*8L*(1<<16);
+            if (RenderDataFactory.this.quadCounters[bufferIdx] >= MAX_QUADS_PER_BUFFER) {
+                //Pooled translucent/double-sided faces can exceed the per-slot limit.
+                //Drop excess detail before overwriting adjacent native memory or overflowing
+                //the packed 16-bit count. Keep the output size equal to sum(quadCounters).
+                RenderDataFactory.this.quadCount--;
+                RenderDataFactory.this.droppedQuads++;
+                return;
+            }
+            long bufferOffset = (RenderDataFactory.this.quadCounters[bufferIdx]++)*8L + bufferIdx*8L*(long)MAX_QUADS_PER_BUFFER;
             MemoryUtil.memPutLong(RenderDataFactory.this.quadBufferPtr + bufferOffset, quad);
 
 
@@ -1742,6 +1752,7 @@ public class RenderDataFactory {
         this.maxZ = Integer.MIN_VALUE;
 
         Arrays.fill(this.quadCounters,0);
+        this.droppedQuads = 0;
         Arrays.fill(this.opaqueMasks, 0);
         Arrays.fill(this.nonOpaqueMasks, 0);
         Arrays.fill(this.fluidMasks, 0);
@@ -1778,8 +1789,20 @@ public class RenderDataFactory {
             return BuiltSection.emptyWithChildren(section.key, section.getNonEmptyChildren());
         }
 
-        if (this.quadCount >= 1<<16) {
-            Logger.warn("Large quad count for section " + WorldEngine.pprintPos(section.key) + " is " + this.quadCount);
+        if (this.quadCount >= MAX_QUADS_PER_BUFFER || this.droppedQuads != 0) {
+            //Report per buffer, not just the total: the total crossing 65536 is harmless when it
+            //is spread across the 8 buffers, whereas a single buffer reaching the cap is the case
+            //that used to corrupt neighbouring geometry.
+            StringBuilder perBuffer = new StringBuilder();
+            for (int i = 0; i < this.quadCounters.length; i++) {
+                if (i != 0) perBuffer.append('/');
+                perBuffer.append(this.quadCounters[i]);
+            }
+            Logger.warn("Large quad count for section " + WorldEngine.pprintPos(section.key) + " is " + this.quadCount
+                    + " [translucent/doubleSided/6 faces: " + perBuffer + ", cap " + MAX_QUADS_PER_BUFFER + "]"
+                    + (this.droppedQuads != 0
+                        ? "; DROPPED " + this.droppedQuads + " quads that would have overrun their buffer"
+                        : ""));
         }
 
         if (this.minX<0 || this.minY<0 || this.minZ<0 || 32<this.maxX || 32<this.maxY || 32<this.maxZ) {
@@ -1793,7 +1816,7 @@ public class RenderDataFactory {
         for (int buffer = 0; buffer < 8; buffer++) {// translucent, double sided quads, 6 faces
             offsets[buffer] = coff;
             int size = this.quadCounters[buffer];
-            UnsafeUtil.memcpy(this.quadBufferPtr + (buffer*(8*(1<<16))), ptr + coff*8L, (size* 8L));
+            UnsafeUtil.memcpy(this.quadBufferPtr + (buffer*(8L*MAX_QUADS_PER_BUFFER)), ptr + coff*8L, (size* 8L));
             coff += size;
         }
 

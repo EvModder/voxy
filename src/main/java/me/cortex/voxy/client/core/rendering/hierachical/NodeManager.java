@@ -183,20 +183,23 @@ public class NodeManager {
 
     //==================================================================================================================
 
-    public void processGeometryResult(BuiltSection sectionResult) {
+    //False leaves ownership with the caller so allocation failures can be retried.
+    public boolean processGeometryResult(BuiltSection sectionResult) {
         long pos = sectionResult.position;
         int nodeId = this.activeSectionMap.get(pos);
         if (nodeId == -1) {
             //Logger.warn("Got geometry update for pos " + WorldEngine.pprintPos(pos) + " but it was not in active map, discarding!");
             sectionResult.free();
-            return;
+            return true;
         }
 
         if ((nodeId&NODE_TYPE_MSK)==NODE_TYPE_REQUEST) {
             //For a request
             if ((nodeId&REQUEST_TYPE_MSK)==REQUEST_TYPE_SINGLE) {
                 var request = this.singleRequests.get(nodeId&NODE_ID_MSK);
-                request.setMesh(this.uploadReplaceSection(request.getMesh(), sectionResult));
+                int mesh = this.uploadReplaceSection(request.getMesh(), sectionResult);
+                if (mesh == IGeometryManager.OUT_OF_CAPACITY) return false;
+                request.setMesh(mesh);
 
                 //sectionResult has a cheeky childExistence field that we can use to set the request too, this is just
                 // because processChildChange is only ever invoked when child existence changes, so we still need to
@@ -212,7 +215,9 @@ public class NodeManager {
             } else if ((nodeId&REQUEST_TYPE_MSK)==REQUEST_TYPE_CHILD) {
                 var request = this.childRequests.get(nodeId&NODE_ID_MSK);
                 int childId = getChildIdx(pos);
-                request.setChildMesh(childId, this.uploadReplaceSection(request.getChildMesh(childId), sectionResult));
+                int mesh = this.uploadReplaceSection(request.getChildMesh(childId), sectionResult);
+                if (mesh == IGeometryManager.OUT_OF_CAPACITY) return false;
+                request.setChildMesh(childId, mesh);
                 if (!request.hasChildChildExistence(childId)) {
                     request.setChildChildExistence(childId, sectionResult.childExistence);
                 }
@@ -234,18 +239,21 @@ public class NodeManager {
                 }
                 Logger.warn("Recieved geometry update but not watching it, discarding");
                 sectionResult.free();
-                return;
+                return true;
             }
 
-            //Unmark geometry inflight
+            int change = this.updateNodeGeometry(nodeId, sectionResult);
+            if (change == IGeometryManager.OUT_OF_CAPACITY) return false;
+            //Unmark geometry inflight only after the update was accepted.
             this.nodeData.unmarkNodeGeometryInFlight(nodeId);
             // Just doing a geometry update
-            if (this.updateNodeGeometry(nodeId, sectionResult) != 0) {
+            if (change != 0) {
                 this.invalidateNode(nodeId);
             }
         } else {
             throw new IllegalStateException();
         }
+        return true;
     }
 
     private void removeGeometryCached(long pos, int id) {
@@ -262,20 +270,15 @@ public class NodeManager {
             return EMPTY_GEOMETRY_ID;
         }
         if (meshId != NULL_GEOMETRY_ID && meshId != EMPTY_GEOMETRY_ID) {
-            int result = this.geometryManager.uploadReplaceSection(meshId, section);
-            if (result != IGeometryManager.OUT_OF_CAPACITY) return result;
-            section.free();
-            return meshId;
+            return this.geometryManager.uploadReplaceSection(meshId, section);
         }
-        int result = this.geometryManager.uploadSection(section);
-        if (result != IGeometryManager.OUT_OF_CAPACITY) return result;
-        section.free();
-        return EMPTY_GEOMETRY_ID;
+        return this.geometryManager.uploadSection(section);
     }
 
     private int updateNodeGeometry(int node, BuiltSection geometry) {
         int previousGeometry = this.nodeData.getNodeGeometry(node);
         int newGeometry = this.uploadReplaceSection(previousGeometry, geometry);
+        if (newGeometry == IGeometryManager.OUT_OF_CAPACITY) return newGeometry;
 
         if (previousGeometry != newGeometry) {
             this.nodeData.setNodeGeometry(node, newGeometry);
