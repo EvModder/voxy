@@ -9,13 +9,14 @@ A fork of [MCRcortex/voxy](https://github.com/MCRcortex/voxy) for Minecraft 26.2
 - Prevents pending Vulkan readbacks from running after their consumers shut down.
 - Bounds GPU-generated draw commands to their allocated buffer regions.
 - Prevents partial-height block faces from incorrectly occluding adjacent terrain.
+- Uses a closer LoD near plane for spectator and substituted camera views.
 - Corrects clear-glass mipmapping and prevents translucent LoD face overlap.
 - Keeps geometry-capacity pressure recoverable and reduces allocator fragmentation.
 - Preserves dirty section data for retry after failed storage writes.
 - Keeps uniform LoD sections compact until per-voxel storage is required.
 - Migrates from RocksDB to concurrent LMDB storage by default for LoD databases.
 - Adds server name and proxy aliasing for stable shared storage of LoDs.
-- Builds every pushed commit as a 90-day GitHub Actions artifact, and retains the latest successful `dev` build.
+- Builds every push as a 90-day artifact and retains the [latest successful build](https://github.com/EvModder/voxy/releases/download/latest-build/voxy-latest.jar).
 
 Voxy generates `.voxy/server_aliases.json` on first use.<br>
 Legacy RocksDB and SQLiteShared saves migrate to LMDB automatically.

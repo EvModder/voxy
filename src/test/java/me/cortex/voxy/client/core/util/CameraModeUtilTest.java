@@ -7,23 +7,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class CameraModeUtilTest {
     @Test
-    void keepsNormalPlayerCamerasOnTheLoDNearPlane() {
-        assertFalse(CameraModeUtil.usesCloseNearPlane(false, true, 0.0));
-        assertFalse(CameraModeUtil.usesCloseNearPlane(false, true, 16.0));
+    void keepsPlayerOwnedCamerasOnTheLoDNearPlane() {
+        assertFalse(CameraModeUtil.usesCloseNearPlane(false, true));
     }
 
     @Test
     void usesCloseNearPlaneInSpectatorMode() {
-        assertTrue(CameraModeUtil.usesCloseNearPlane(true, true, 0.0));
+        assertTrue(CameraModeUtil.usesCloseNearPlane(true, true));
     }
 
     @Test
     void usesCloseNearPlaneForSubstitutedCameraEntity() {
-        assertTrue(CameraModeUtil.usesCloseNearPlane(false, false, 0.0));
+        assertTrue(CameraModeUtil.usesCloseNearPlane(false, false));
     }
 
-    @Test
-    void usesCloseNearPlaneWhenCameraMovesAwayFromPlayer() {
-        assertTrue(CameraModeUtil.usesCloseNearPlane(false, true, 36.01));
-    }
 }

@@ -1,10 +1,11 @@
 package me.cortex.voxy.client.core.util;
 
-import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 
 public final class CameraModeUtil {
-    private static final double DETACHED_DISTANCE_SQUARED = 6.0 * 6.0;
+    //Bring detached views closer than the normal 8-16 block plane while retaining
+    //more depth precision than vanilla's 0.05 near plane with Voxy's 48000 far plane.
+    public static final float DETACHED_NEAR_PLANE = 1.0f;
 
     private CameraModeUtil() {}
 
@@ -14,17 +15,16 @@ public final class CameraModeUtil {
         var camera = minecraft.gameRenderer.mainCamera();
         if (player == null || !camera.isInitialized()) return false;
 
-        return usesCloseNearPlane(
-                player.isSpectator(),
-                camera.entity() == player,
-                camera.position().distanceToSqr(player.getEyePosition()));
+        return usesCloseNearPlane(player.isSpectator(), camera.entity() == player);
     }
 
-    static boolean usesCloseNearPlane(boolean spectator, boolean playerCamera, double distanceSquared) {
-        return spectator || !playerCamera || distanceSquared > DETACHED_DISTANCE_SQUARED;
+    //Avoid comparing interpolated camera and tick positions, which can diverge during
+    //teleports. This detects substituted camera entities, not every freecam implementation.
+    static boolean usesCloseNearPlane(boolean spectator, boolean playerCamera) {
+        return spectator || !playerCamera;
     }
 
     public static float selectNearPlane(float normalNearPlane) {
-        return usesCloseNearPlane() ? Camera.PROJECTION_Z_NEAR : normalNearPlane;
+        return usesCloseNearPlane() ? Math.min(DETACHED_NEAR_PLANE, normalNearPlane) : normalNearPlane;
     }
 }
