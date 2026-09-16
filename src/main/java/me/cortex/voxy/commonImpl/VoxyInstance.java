@@ -37,7 +37,7 @@ public abstract class VoxyInstance {
         }
         Logger.info("Initializing voxy instance");
         this.threadPool = new UnifiedServiceThreadPool();
-        this.savingService = new SectionSavingService(this.getServiceManager());
+        this.savingService = new SectionSavingService();
         this.ingestService = new VoxelIngestService(this.getServiceManager());
         this.importManager = this.createImportManager();
         this.savingServiceRateLimiter = ()->this.savingService.getTaskCount()<1200;

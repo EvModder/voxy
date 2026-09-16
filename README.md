@@ -15,6 +15,7 @@ A fork of [MCRcortex/voxy](https://github.com/MCRcortex/voxy) for Minecraft 26.2
 - Preserves dirty section data for retry after failed storage writes.
 - Keeps uniform LoD sections compact until per-voxel storage is required.
 - Migrates from RocksDB to concurrent LMDB storage by default for LoD databases.
+- Batches durable LoD saves on a dedicated worker, leaving terrain workers available.
 - Adds server name and proxy aliasing for stable shared storage of LoDs.
 - Builds every push as a 90-day artifact and retains the [latest successful build](https://github.com/EvModder/voxy/releases/download/latest-build/voxy-latest.jar).
 

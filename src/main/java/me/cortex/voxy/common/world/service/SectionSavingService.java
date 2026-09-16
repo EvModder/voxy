@@ -2,48 +2,62 @@ package me.cortex.voxy.common.world.service;
 
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.thread.Service;
-import me.cortex.voxy.common.thread.ServiceManager;
+import me.cortex.voxy.common.thread.UnifiedServiceThreadPool;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.common.world.WorldSection;
 
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.ArrayList;
 
 //TODO: add an option for having synced saving, that is when call enqueueSave, that will instead, instantly
 // save to the db, this can be useful for just reducing the amount of thread pools in total
 // might have some issues with threading if the same section is saved from multiple threads?
 public class SectionSavingService {
     private static final int SOFT_MAX_QUEUE_SIZE = 5_000;
+    private static final int MAX_BATCH_SIZE = 32;
 
     private final Service service;
+    private final UnifiedServiceThreadPool savingPool = new UnifiedServiceThreadPool();
     private final ThreadLocal<Boolean> processingSave = ThreadLocal.withInitial(() -> false);
     private record SaveEntry(WorldEngine engine, WorldSection section) {}
     private final ConcurrentLinkedDeque<SaveEntry> saveQueue = new ConcurrentLinkedDeque<>();
 
-    public SectionSavingService(ServiceManager sm) {
-        this.service = sm.createServiceNoCleanup(() -> this::processJob, 100, "Section saving service");
+    public SectionSavingService() {
+        //Durable writes must not occupy Sodium/ingestion/mesh workers waiting for LMDB's single writer.
+        this.service = this.savingPool.serviceManager.createServiceNoCleanup(() -> this::processJob, 100, "Section saving service");
+        this.savingPool.setNumThreads(1);
     }
 
-    private void processJob() {
+    private synchronized void processJob() {
         var task = this.saveQueue.pop();
-        var section = task.section;
-        section.assertNotFree();
+        var batch = new ArrayList<WorldSection>(MAX_BATCH_SIZE);
+        batch.add(task.section);
+        while (batch.size() < MAX_BATCH_SIZE) {
+            var next = this.saveQueue.peek();
+            if (next == null || next.engine != task.engine || !this.service.steal()) break;
+            batch.add(this.saveQueue.pop().section);
+        }
         this.processingSave.set(true);
         try {
-            //Unmark it dirty here (if it wasnt or w/e) so that it doesnt pointlessly resave (in theory this should be safe to do)
-            if (section.exchangeIsInSaveQueue(false)) {
+            var toSave = new ArrayList<WorldSection>(batch.size());
+            for (var section : batch) {
+                section.assertNotFree();
+                boolean save = section.exchangeIsInSaveQueue(false);
                 section.setNotDirty();//do after the atomic exchange
-                try {
-                    task.engine.storage.saveSection(section);
-                } catch (Exception e) {
+                if (save) toSave.add(section);
+            }
+            try {
+                if (!toSave.isEmpty()) task.engine.storage.saveSections(toSave);
+            } catch (Exception e) {
+                //A failed transaction may roll back every entry; keep them all dirty for retry.
+                for (var section : toSave) {
                     section.markDirty();
-                    Logger.error("Voxy saver had an exception while executing please check logs and report the error", e);
                 }
-            } else {
-                section.setNotDirty();
+                Logger.error("Voxy saver had an exception while executing please check logs and report the error", e);
             }
         } finally {
             try {
-                section.release();
+                for (var section : batch) section.release();
             } finally {
                 this.processingSave.remove();
             }
@@ -102,6 +116,7 @@ public class SectionSavingService {
         while (!this.saveQueue.isEmpty()) {
             this.processJob();
         }
+        this.savingPool.shutdown();
     }
 
     public int getTaskCount() {

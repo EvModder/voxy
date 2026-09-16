@@ -9,6 +9,7 @@ import me.cortex.voxy.common.world.SaveLoadSystem3;
 import me.cortex.voxy.common.world.WorldSection;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.function.IntFunction;
 import java.util.function.LongConsumer;
 
@@ -47,6 +48,12 @@ public class SectionSerializationStorage extends SectionStorage {
         var saveData = SaveLoadSystem3.serialize(section);
         this.backend.setSectionData(section.key, saveData);
         //Note that savedData isnt freed (the save system uses a cache)
+    }
+
+    @Override
+    public void saveSections(List<WorldSection> sections) {
+        this.backend.setSectionDataBatch(sections.size(), i -> sections.get(i).key,
+                i -> SaveLoadSystem3.serialize(sections.get(i)));
     }
 
     @Override

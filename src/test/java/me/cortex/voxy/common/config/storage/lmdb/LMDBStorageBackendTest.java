@@ -30,6 +30,8 @@ import java.util.zip.GZIPOutputStream;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.lwjgl.util.lmdb.LMDB.MDB_CREATE;
 import static org.lwjgl.util.lmdb.LMDB.MDB_INTEGERKEY;
 import static org.lwjgl.util.lmdb.LMDB.MDB_NOTLS;
@@ -52,6 +54,31 @@ final class LMDBStorageBackendTest {
 
     @TempDir
     Path temporaryDirectory;
+
+    @Test
+    void batchedCompressedWritesConsumeReusableScratchAndRollbackOnFailure() {
+        var raw = new LMDBStorageBackend(this.temporaryDirectory.resolve("batch.lmdb").toString());
+        var backend = new me.cortex.voxy.common.config.storage.other.CompressionStorageAdaptor(
+                new me.cortex.voxy.common.config.compressors.ZSTDCompressor(1), raw);
+        var scratch = new MemoryBuffer(256);
+        try {
+            backend.setSectionDataBatch(32, i -> i, i -> {
+                scratch.asByteBuffer().putInt(0, i);
+                return scratch;
+            });
+            for (int i = 0; i < 32; i++) {
+                assertEquals(i, backend.getSectionData(i, scratch.createUntrackedUnfreeableReference()).asByteBuffer().getInt(0));
+            }
+            assertThrows(IllegalStateException.class, () -> backend.setSectionDataBatch(2, i -> 100 + i, i -> {
+                if (i == 1) throw new IllegalStateException("abort batch");
+                return scratch;
+            }));
+            assertNull(backend.getSectionData(100, scratch.createUntrackedUnfreeableReference()));
+        } finally {
+            scratch.free();
+            backend.close();
+        }
+    }
 
     @Test
     void allocatesMappingsAtomicallyAcrossIndependentBackends() throws Exception {

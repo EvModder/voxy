@@ -142,15 +142,7 @@ public class RenderGenerationService {
         //long time = BuiltSection.getTime();
         boolean shouldFreeSection = true;
 
-        WorldSection section;
-        if (task.section == null) {
-            section = this.acquireSection(task.position);
-        } else {
-            section = task.section;
-        }
-
-
-        {//Remove the task from the map, this is done before we check for null sections as well the task map needs to be correct
+        {//Remove before reading source data so updates during a load can enqueue a fresh build, even if this read returns null.
             long stamp = this.taskMapLock.writeLock();
             var rtask = this.taskMap.remove(task.position);
             if (rtask != task) {
@@ -158,6 +150,13 @@ public class RenderGenerationService {
                 throw new IllegalStateException();
             }
             this.taskMapLock.unlockWrite(stamp);
+        }
+
+        WorldSection section;
+        if (task.section == null) {
+            section = this.acquireSection(task.position);
+        } else {
+            section = task.section;
         }
 
         if (section == null) {

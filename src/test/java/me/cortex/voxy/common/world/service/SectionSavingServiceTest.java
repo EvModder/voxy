@@ -17,19 +17,67 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntFunction;
 import java.util.function.LongConsumer;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class SectionSavingServiceTest {
     @Test
+    void stalledStorageDoesNotOccupyTerrainWorkersAndQueuedSavesAreBatched() throws Exception {
+        SharedConstants.tryDetectVersion();
+        Bootstrap.bootStrap();
+        var entered = new CountDownLatch(1);
+        var unblock = new CountDownLatch(1);
+        var saved = new CountDownLatch(65);
+        var sizes = new CopyOnWriteArrayList<Integer>();
+        var storage = new FailingOnceStorage() {
+            @Override public void saveSections(List<WorldSection> sections) {
+                sizes.add(sections.size());
+                entered.countDown();
+                try {
+                    assertTrue(unblock.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                sections.forEach(section -> saved.countDown());
+            }
+        };
+        var pool = new UnifiedServiceThreadPool();
+        pool.setNumThreads(1);
+        var terrainRan = new CountDownLatch(1);
+        var terrain = pool.serviceManager.createServiceNoCleanup(() -> terrainRan::countDown, 1);
+        var saving = new SectionSavingService();
+        var world = new WorldEngine(storage);
+        world.setSaveCallback(saving::enqueueSave);
+        try {
+            for (int i = 0; i < 65; i++) {
+                var section = world.acquire(0, i, 0, 0);
+                world.markDirty(section);
+                section.release();
+                if (i == 0) assertTrue(entered.await(5, TimeUnit.SECONDS));
+            }
+            terrain.execute();
+            assertTrue(terrainRan.await(5, TimeUnit.SECONDS));
+            unblock.countDown();
+            assertTrue(saved.await(5, TimeUnit.SECONDS));
+            assertEquals(List.of(1, 32, 32), sizes);
+        } finally {
+            unblock.countDown();
+            saving.shutdown();
+            terrain.shutdown();
+            pool.shutdown();
+            world.free();
+        }
+    }
+
+    @Test
     void preservesDirtySectionAfterFailedSave() throws Exception {
         SharedConstants.tryDetectVersion();
         Bootstrap.bootStrap();
         var storage = new FailingOnceStorage();
-        var pool = new UnifiedServiceThreadPool();
-        pool.setNumThreads(1);
-        var savingService = new SectionSavingService(pool.serviceManager);
+        var savingService = new SectionSavingService();
         var engine = new WorldEngine(storage);
         engine.setSaveCallback(savingService::enqueueSave);
 
@@ -46,7 +94,6 @@ final class SectionSavingServiceTest {
 
         savingService.shutdown();
         engine.free();
-        pool.shutdown();
     }
 
     private static boolean await(BooleanSupplier condition, Duration timeout) throws InterruptedException {
@@ -57,7 +104,7 @@ final class SectionSavingServiceTest {
         return condition.getAsBoolean();
     }
 
-    private static final class FailingOnceStorage extends SectionStorage {
+    private static class FailingOnceStorage extends SectionStorage {
         private final AtomicInteger attempts = new AtomicInteger();
         private final CountDownLatch firstAttempt = new CountDownLatch(1);
         private final CountDownLatch saved = new CountDownLatch(1);

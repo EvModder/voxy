@@ -135,6 +135,24 @@ public final class LMDBStorageBackend extends StorageBackend {
     }
 
     @Override
+    public void setSectionDataBatch(int count, java.util.function.IntToLongFunction keyAt,
+                                   java.util.function.IntFunction<MemoryBuffer> dataAt) {
+        ensureOpen();
+        if (count == 0) return;
+        this.environment.write((transaction, stack) -> {
+            for (int i = 0; i < count; i++) {
+                var data = dataAt.apply(i);
+                if (data.size > Integer.MAX_VALUE) {
+                    throw new IllegalArgumentException("Voxy section exceeds LMDB value limits: " + data.size);
+                }
+                put(transaction, this.environment.sectionDatabase, longBuffer(stack, keyAt.applyAsLong(i)),
+                        MemoryUtil.memByteBuffer(data.address, (int) data.size), stack);
+            }
+            return null;
+        });
+    }
+
+    @Override
     public void deleteSectionData(long key) {
         ensureOpen();
         this.environment.write((transaction, stack) -> {

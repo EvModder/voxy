@@ -6,6 +6,8 @@ import me.cortex.voxy.common.util.MemoryBuffer;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntFunction;
+import java.util.function.IntToLongFunction;
 
 public abstract class StorageBackend implements IMappingStorage, IStoredSectionPositionIterator {
 
@@ -13,6 +15,13 @@ public abstract class StorageBackend implements IMappingStorage, IStoredSectionP
     public abstract MemoryBuffer getSectionData(long key, MemoryBuffer scratch);
 
     public abstract void setSectionData(long key, MemoryBuffer data);
+
+    //Consume each value before requesting the next: serializers and compressors reuse scratch memory.
+    public void setSectionDataBatch(int count, IntToLongFunction keyAt, IntFunction<MemoryBuffer> dataAt) {
+        for (int i = 0; i < count; i++) {
+            this.setSectionData(keyAt.applyAsLong(i), dataAt.apply(i));
+        }
+    }
 
     public abstract void deleteSectionData(long key);
 

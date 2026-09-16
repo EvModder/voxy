@@ -5,6 +5,8 @@ import me.cortex.voxy.common.config.compressors.CompressorConfig;
 import me.cortex.voxy.common.config.compressors.StorageCompressor;
 import me.cortex.voxy.common.config.storage.StorageBackend;
 import me.cortex.voxy.common.util.MemoryBuffer;
+import java.util.function.IntFunction;
+import java.util.function.IntToLongFunction;
 
 //Compresses the section data
 public class CompressionStorageAdaptor extends DelegatingStorageAdaptor {
@@ -30,6 +32,11 @@ public class CompressionStorageAdaptor extends DelegatingStorageAdaptor {
         var cdata = this.compressor.compress(data);
         this.delegate.setSectionData(key, cdata);
         //Note that the data isnt freed (data cache in the compressors are used)
+    }
+
+    @Override
+    public void setSectionDataBatch(int count, IntToLongFunction keyAt, IntFunction<MemoryBuffer> dataAt) {
+        this.delegate.setSectionDataBatch(count, keyAt, i -> this.compressor.compress(dataAt.apply(i)));
     }
 
     @Override
