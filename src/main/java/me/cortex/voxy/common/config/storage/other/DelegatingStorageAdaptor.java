@@ -1,6 +1,7 @@
 package me.cortex.voxy.common.config.storage.other;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import me.cortex.voxy.common.config.storage.StorageBackend;
 import me.cortex.voxy.common.util.MemoryBuffer;
 
@@ -36,6 +37,11 @@ public class DelegatingStorageAdaptor extends StorageBackend {
     @Override
     public void putIdMapping(int id, ByteBuffer data) {
         this.delegate.putIdMapping(id, data);
+    }
+
+    @Override
+    public void putIdMappings(Int2ObjectMap<byte[]> mappings) {
+        this.delegate.putIdMappings(mappings);
     }
 
     @Override

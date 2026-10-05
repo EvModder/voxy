@@ -79,9 +79,9 @@ public abstract class MixinLevelRenderer implements IVoxyRenderSystemHolder {
             Logger.info("Not creating renderer due to null instance");
             return;
         }
-        WorldEngine world = this.identifier.getOrCreateEngine(true);
+        WorldEngine world = instance.getOrCreate(this.identifier);
         if (world == null) {
-            Logger.warn("Not creating renderer due to null engine");
+            Logger.info("Deferring renderer until world storage is ready");
             return;
         }
         this.voxy$createEngineDirect(world);

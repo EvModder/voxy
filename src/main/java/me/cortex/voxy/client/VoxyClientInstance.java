@@ -3,6 +3,7 @@ package me.cortex.voxy.client;
 import me.cortex.voxy.client.compat.FlashbackCompat;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.RenderResourceReuse;
+import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.mixin.sodium.AccessorSodiumWorldRenderer;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.StorageConfigUtil;
@@ -22,6 +23,10 @@ public class VoxyClientInstance extends VoxyInstance {
     private final Config config;
     private final Path basePath;
     private final boolean noIngestOverride;
+    private final AsyncStoragePreparation<WorldIdentifier> pendingStorage = new AsyncStoragePreparation<>();
+    private final String playerId = Minecraft.getInstance().getUser().getProfileId().toString().replace(':', '-');
+    private WorldIdentifier catchUpWorld;
+    private int catchUpIndex = -1;
 
     public VoxyClientInstance() {
         {
@@ -68,10 +73,40 @@ public class VoxyClientInstance extends VoxyInstance {
 
     @Override
     protected SectionStorage createStorage(WorldIdentifier identifier) {
+        return this.pendingStorage.take(identifier);
+    }
+
+    @Override
+    protected boolean prepareStorage(WorldIdentifier identifier) {
+        return this.pendingStorage.prepare(identifier, () -> this.openStorage(identifier), () ->
+                Minecraft.getInstance().execute(() -> {
+                    var client = Minecraft.getInstance();
+                    if (me.cortex.voxy.commonImpl.VoxyCommon.getInstance() != this
+                            || !identifier.equals(WorldIdentifier.of(client.level))) return;
+                    var holder = IVoxyRenderSystemHolder.getNullableHolder();
+                    if (holder != null && holder.voxy$getRenderSystem() == null) holder.voxy$createRenderer();
+                    this.catchUpWorld = identifier;
+                    this.catchUpIndex = 0;
+                }));
+    }
+
+    void tickStorageCatchUp() {
+        if (this.catchUpIndex < 0) return;
+        var level = Minecraft.getInstance().level;
+        if (!this.catchUpWorld.equals(WorldIdentifier.of(level)) || !this.isIngestEnabled(this.catchUpWorld)) {
+            this.catchUpIndex = -1;
+            return;
+        }
+        // Revisit chunks received during migration, without one large main-thread ingest burst.
+        this.catchUpIndex = ((ICheekyClientChunkCache) level.getChunkSource())
+                .voxy$ingestLoadedChunks(this.catchUpIndex, 4);
+    }
+
+    private SectionStorage openStorage(WorldIdentifier identifier) {
         var ctx = new ConfigBuildCtx();
         ctx.setProperty(ConfigBuildCtx.BASE_SAVE_PATH, this.basePath.toString());
         ctx.setProperty(ConfigBuildCtx.WORLD_IDENTIFIER, identifier.getWorldId());
-        ctx.setProperty(ConfigBuildCtx.PLAYER_UUID, Minecraft.getInstance().getUser().getProfileId().toString().replace(':','-'));
+        ctx.setProperty(ConfigBuildCtx.PLAYER_UUID, this.playerId);
         ctx.pushPath(ConfigBuildCtx.DEFAULT_STORAGE_PATH);
         return this.config.sectionStorageConfig.build(ctx);
     }
@@ -87,6 +122,7 @@ public class VoxyClientInstance extends VoxyInstance {
 
     @Override
     public void shutdown() {
+        this.pendingStorage.close();
         super.shutdown();
         //Free the render resources cache since the entire instance is freed
         RenderResourceReuse.clearResources();

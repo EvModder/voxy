@@ -1,5 +1,7 @@
 package me.cortex.voxy.common.world.other;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+
 import com.mojang.serialization.Dynamic;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import me.cortex.voxy.common.Logger;
@@ -542,7 +544,7 @@ public class Mapper {
     public void forceResaveStates() {
         var blocks = new ArrayList<>(this.block2stateEntry.values());
         var biomes = new ArrayList<>(this.biome2biomeEntry.values());
-
+        var mappings = new Int2ObjectOpenHashMap<byte[]>();
 
         for (var entry : blocks) {
             if (entry.state.isAir() && entry.id == 0) {
@@ -551,12 +553,7 @@ public class Mapper {
             if (this.blockId2stateEntry.indexOf(entry) != entry.id) {
                 throw new IllegalStateException("State Id NOT THE SAME, very critically bad. arr:" + this.blockId2stateEntry.indexOf(entry) + " entry: " + entry.id);
             }
-            byte[] serialized = entry.serialize();
-            ByteBuffer buffer = MemoryUtil.memAlloc(serialized.length);
-            buffer.put(serialized);
-            buffer.rewind();
-            this.storage.putIdMapping(entry.id | (BLOCK_STATE_TYPE<<30), buffer);
-            MemoryUtil.memFree(buffer);
+            mappings.put(entry.id | (BLOCK_STATE_TYPE<<30), entry.serialize());
         }
 
         for (var entry : biomes) {
@@ -564,14 +561,10 @@ public class Mapper {
                 throw new IllegalStateException("Biome Id NOT THE SAME, very critically bad");
             }
 
-            byte[] serialized = entry.serialize();
-            ByteBuffer buffer = MemoryUtil.memAlloc(serialized.length);
-            buffer.put(serialized);
-            buffer.rewind();
-            this.storage.putIdMapping(entry.id | (BIOME_TYPE<<30), buffer);
-            MemoryUtil.memFree(buffer);
+            mappings.put(entry.id | (BIOME_TYPE<<30), entry.serialize());
         }
 
+        this.storage.putIdMappings(mappings);
         this.storage.flush();
     }
 

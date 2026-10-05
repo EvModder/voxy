@@ -6,4 +6,6 @@ import org.jspecify.annotations.Nullable;
 public interface ICheekyClientChunkCache {
     @Nullable
     LevelChunk voxy$cheekyGetChunk(int x, int z);
+
+    int voxy$ingestLoadedChunks(int startIndex, int budget);
 }

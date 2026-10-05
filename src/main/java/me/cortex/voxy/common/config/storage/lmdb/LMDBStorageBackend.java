@@ -1,6 +1,7 @@
 package me.cortex.voxy.common.config.storage.lmdb;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.config.ConfigBuildCtx;
 import me.cortex.voxy.common.config.MappingIdentity;
@@ -25,6 +26,7 @@ import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +70,13 @@ public final class LMDBStorageBackend extends StorageBackend {
         if (initialMapSizeBytes <= 0) {
             throw new IllegalArgumentException("LMDB map size must be positive");
         }
-        this.environment = acquireEnvironment(Path.of(path), initialMapSizeBytes);
+        Path storagePath = Path.of(path).toAbsolutePath().normalize();
+        // Fresh stores do not need to load the migration implementation.
+        if (Files.isRegularFile(storagePath.resolve("data.mdb"))
+                || Files.exists(storagePath.resolveSibling(storagePath.getFileName() + ".lmdb1"))) {
+            storagePath = LmdbFormatMigration.resolve(storagePath);
+        }
+        this.environment = acquireEnvironment(storagePath, initialMapSizeBytes);
     }
 
     @Override
@@ -164,39 +172,67 @@ public final class LMDBStorageBackend extends StorageBackend {
     @Override
     public void putIdMapping(int mappingKey, ByteBuffer data) {
         ensureOpen();
-        int entryType = mappingKey >>> 30;
-        int entryId = mappingKey & ID_MASK;
-        validateEntryType(entryType);
-        byte[] serialized = copy(data);
-        byte[] identity = MappingIdentity.fromSerializedMapping(serialized);
-        byte[] identityHash = hashIdentity(entryType, identity);
-
+        var mapping = prepareMapping(mappingKey, copy(data));
         this.environment.write((transaction, stack) -> {
-            ByteBuffer mappingKeyBuffer = intBuffer(stack, mappingKey);
-            ByteBuffer oldValue = get(transaction, this.environment.idMappingDatabase,
-                    mappingKeyBuffer, stack);
-            if (oldValue != null) {
-                byte[] oldIdentity = MappingIdentity.fromSerializedMapping(copy(oldValue));
-                if (!Arrays.equals(oldIdentity, identity)) {
-                    byte[] oldHash = hashIdentity(entryType, oldIdentity);
-                    Integer canonicalId = getCanonicalMappingId(transaction, oldHash, oldIdentity, stack);
-                    if (canonicalId != null && canonicalId == entryId) {
-                        delete(transaction, this.environment.mappingIdentityDatabase,
-                                byteBuffer(stack, oldHash), stack);
-                    }
-                }
-            }
-
-            Integer canonicalId = getCanonicalMappingId(transaction, identityHash, identity, stack);
-            if (canonicalId == null || canonicalId == entryId) {
-                putCanonicalMapping(transaction, identityHash, identity, entryId, stack);
-            }
-            put(transaction, this.environment.idMappingDatabase, mappingKeyBuffer,
-                    byteBuffer(stack, serialized), stack);
-            advanceNextMappingId(transaction, entryType, entryId, stack);
-            incrementMappingVersion(transaction, stack);
+            this.putMapping(transaction, mapping, stack);
             return null;
         });
+    }
+
+    @Override
+    public void putIdMappings(Int2ObjectMap<byte[]> mappings) {
+        ensureOpen();
+        if (mappings.isEmpty()) return;
+        var prepared = new ArrayList<PreparedMapping>(mappings.size());
+        for (var entry : mappings.int2ObjectEntrySet()) {
+            prepared.add(prepareMapping(entry.getIntKey(), entry.getValue().clone()));
+        }
+        // One durable commit for the rewrite, including identity indexes and counters.
+        this.environment.write((transaction, stack) -> {
+            for (var mapping : prepared) {
+                try (var entryStack = MemoryStack.stackPush()) {
+                    this.putMapping(transaction, mapping, entryStack);
+                }
+            }
+            return null;
+        });
+    }
+
+    private record PreparedMapping(int key, byte[] serialized, byte[] identity, byte[] identityHash) {}
+
+    private static PreparedMapping prepareMapping(int mappingKey, byte[] serialized) {
+        int entryType = mappingKey >>> 30;
+        validateEntryType(entryType);
+        byte[] identity = MappingIdentity.fromSerializedMapping(serialized);
+        return new PreparedMapping(mappingKey, serialized, identity, hashIdentity(entryType, identity));
+    }
+
+    private void putMapping(long transaction, PreparedMapping mapping, MemoryStack stack) {
+        int entryType = mapping.key >>> 30;
+        int entryId = mapping.key & ID_MASK;
+        ByteBuffer mappingKeyBuffer = intBuffer(stack, mapping.key);
+        ByteBuffer oldValue = get(transaction, this.environment.idMappingDatabase,
+                mappingKeyBuffer, stack);
+        if (oldValue != null) {
+            byte[] oldIdentity = MappingIdentity.fromSerializedMapping(copy(oldValue));
+            if (!Arrays.equals(oldIdentity, mapping.identity)) {
+                byte[] oldHash = hashIdentity(entryType, oldIdentity);
+                Integer canonicalId = getCanonicalMappingId(transaction, oldHash, oldIdentity, stack);
+                if (canonicalId != null && canonicalId == entryId) {
+                    delete(transaction, this.environment.mappingIdentityDatabase,
+                            byteBuffer(stack, oldHash), stack);
+                }
+            }
+        }
+
+        Integer canonicalId = getCanonicalMappingId(transaction, mapping.identityHash, mapping.identity, stack);
+        if (canonicalId == null || canonicalId == entryId) {
+            putCanonicalMapping(transaction, mapping.identityHash, mapping.identity, entryId, stack);
+        }
+        put(transaction, this.environment.idMappingDatabase, mappingKeyBuffer,
+                byteBuffer(stack, mapping.serialized), stack);
+        advanceNextMappingId(transaction, entryType, entryId, stack);
+        incrementMappingVersion(transaction, stack);
     }
 
     @Override

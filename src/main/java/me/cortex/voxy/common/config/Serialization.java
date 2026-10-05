@@ -105,8 +105,8 @@ public class Serialization {
             if (VoxyCommon.IS_DEDICATED_SERVER&&clzName.startsWith("me.cortex.voxy.client")) {
                 continue;//Dont load stuff from client path when were on a dedicated server
             }
-            if (!clzName.toLowerCase(Locale.ROOT).contains("config")) {
-                continue;//Only load classes that contain the word config
+            if (!clzName.substring(clzName.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT).contains("config")) {
+                continue;//Match class names, not the config package: avoid initializing unused backends and migrations.
             }
             if (clzName.contains("mixin")) {
                 continue;//Dont want to load mixins

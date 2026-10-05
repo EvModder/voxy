@@ -1,6 +1,7 @@
 accessWidener v1 official
 
 accessible class net/minecraft/client/multiplayer/ClientChunkCache$Storage
+accessible field net/minecraft/client/multiplayer/ClientChunkCache$Storage chunks Ljava/util/concurrent/atomic/AtomicReferenceArray;
 accessible class com/mojang/renderpearl/backend/opengl/GlDebug$LogEntry
 
 accessible class com/mojang/renderpearl/backend/opengl/GlRenderPass

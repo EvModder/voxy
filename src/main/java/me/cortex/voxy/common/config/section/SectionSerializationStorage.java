@@ -1,6 +1,7 @@
 package me.cortex.voxy.common.config.section;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import me.cortex.voxy.common.config.ConfigBuildCtx;
 import me.cortex.voxy.common.config.storage.StorageBackend;
 import me.cortex.voxy.common.config.storage.StorageConfig;
@@ -59,6 +60,11 @@ public class SectionSerializationStorage extends SectionStorage {
     @Override
     public void putIdMapping(int id, ByteBuffer data) {
         this.backend.putIdMapping(id, data);
+    }
+
+    @Override
+    public void putIdMappings(Int2ObjectMap<byte[]> mappings) {
+        this.backend.putIdMappings(mappings);
     }
 
     @Override

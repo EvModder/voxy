@@ -56,6 +56,46 @@ final class LMDBStorageBackendTest {
     Path temporaryDirectory;
 
     @Test
+    void bulkMappingRewritePreservesIdsIndexesAndRejectsInvalidInput() {
+        try (var batch = new CloseableBackend(this.temporaryDirectory.resolve("mapping-batch"));
+             var singles = new CloseableBackend(this.temporaryDirectory.resolve("mapping-singles"))) {
+            var mappings = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<byte[]>();
+            for (int i = 0; i < 256; i++) mappings.put((2 << 30) | i, serializedBiome(i, "test:old_" + i));
+            batch.backend.putIdMappings(mappings);
+            singles.backend.putIdMappings(mappings);
+            for (int i = 0; i < 256; i++) mappings.put((2 << 30) | i, serializedBiome(i, "test:new_" + i));
+
+            long started = System.nanoTime();
+            for (var entry : mappings.int2ObjectEntrySet()) {
+                try (var stack = MemoryStack.stackPush()) {
+                    var bytes = stack.malloc(entry.getValue().length).put(entry.getValue()).flip();
+                    singles.backend.putIdMapping(entry.getIntKey(), bytes);
+                }
+            }
+            long singleNanos = System.nanoTime() - started;
+            var wrapper = new me.cortex.voxy.common.config.section.SectionSerializationStorage(
+                    new me.cortex.voxy.common.config.storage.other.CompressionStorageAdaptor(
+                            new me.cortex.voxy.common.config.compressors.ZSTDCompressor(1), batch.backend));
+            started = System.nanoTime();
+            wrapper.putIdMappings(mappings);
+            System.out.printf("256 mapping rewrites: single commits %.1f ms, batch %.1f ms%n",
+                    singleNanos / 1e6, (System.nanoTime() - started) / 1e6);
+            assertEquals(singles.backend.getIdMappingVersion(), batch.backend.getIdMappingVersion());
+            var stored = batch.backend.getIdMappingsData();
+            assertEquals(256, stored.size());
+            for (var entry : mappings.int2ObjectEntrySet()) assertArrayEquals(entry.getValue(), stored.get(entry.getIntKey()));
+            for (int i = 0; i < 256; i++) assertEquals(i, getOrCreateBiome(batch.backend, "test:new_" + i));
+            assertEquals(256, getOrCreateBiome(batch.backend, "test:old_0"));
+
+            long version = batch.backend.getIdMappingVersion();
+            mappings.put((2 << 30) | 500, new byte[]{1, 2, 3});
+            assertThrows(RuntimeException.class, () -> wrapper.putIdMappings(mappings));
+            assertEquals(version, batch.backend.getIdMappingVersion());
+            assertNull(batch.backend.getIdMappingsData().get((2 << 30) | 500));
+        }
+    }
+
+    @Test
     void batchedCompressedWritesConsumeReusableScratchAndRollbackOnFailure() {
         var raw = new LMDBStorageBackend(this.temporaryDirectory.resolve("batch.lmdb").toString());
         var backend = new me.cortex.voxy.common.config.storage.other.CompressionStorageAdaptor(

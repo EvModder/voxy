@@ -241,6 +241,34 @@ dependencies {
 }
 
 
+// The old database reader runs in a separate JVM: never load both JNI ABIs
+// into Minecraft. Only this helper retains the LMDB 0.9 dependency.
+sourceSets.create('legacyMigration')
+dependencies {
+    legacyMigrationImplementation 'org.lwjgl:lwjgl:3.4.1'
+    legacyMigrationImplementation 'org.lwjgl:lwjgl-lmdb:3.4.1'
+    for (classifier in ['natives-windows', 'natives-linux', 'natives-macos', 'natives-macos-arm64']) {
+        legacyMigrationRuntimeOnly "org.lwjgl:lwjgl:3.4.1:${classifier}"
+        legacyMigrationRuntimeOnly "org.lwjgl:lwjgl-lmdb:3.4.1:${classifier}"
+    }
+    if (includeOtherArchs) {
+        legacyMigrationRuntimeOnly 'org.lwjgl:lwjgl:3.4.1:natives-linux-arm64'
+        legacyMigrationRuntimeOnly 'org.lwjgl:lwjgl-lmdb:3.4.1:natives-linux-arm64'
+    }
+}
+def legacyMigrationJar = tasks.register('legacyMigrationJar', Jar) {
+    archiveFileName = 'legacy-lmdb-reader.jar'
+    destinationDirectory = layout.buildDirectory.dir('migration-helper')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(sourceSets.legacyMigration.output)
+    from({ configurations.legacyMigrationRuntimeClasspath.collect { zipTree(it) } })
+    exclude 'module-info.class', 'META-INF/versions/**/module-info.class'
+    manifest.attributes('Main-Class': 'me.cortex.voxy.migration.LegacyLmdbExport')
+}
+processResources {
+    from(legacyMigrationJar) { into 'voxy/migration' }
+}
+
 def targetJavaVersion = 25
 tasks.withType(JavaCompile).configureEach {
     it.options.encoding = "UTF-8"

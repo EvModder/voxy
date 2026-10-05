@@ -24,6 +24,20 @@ public class MixinClientChunkCache implements ICheekyClientChunkCache {
     private volatile ClientChunkCache.Storage storage;
 
     @Override
+    public int voxy$ingestLoadedChunks(int startIndex, int budget) {
+        var chunks = this.storage.chunks;
+        int index = startIndex;
+        for (; index < chunks.length() && budget > 0; index++) {
+            var chunk = chunks.get(index);
+            if (chunk != null) {
+                VoxelIngestService.tryAutoIngestChunk(chunk);
+                budget--;
+            }
+        }
+        return index < chunks.length() ? index : -1;
+    }
+
+    @Override
     public @Nullable LevelChunk voxy$cheekyGetChunk(int x, int z) {
         //This doesnt do the in range check stuff, it just gets the chunk at all costs
         var chunk = this.storage.getChunk(this.storage.getIndex(x, z));
