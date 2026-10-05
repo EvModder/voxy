@@ -1,7 +1,7 @@
 package me.cortex.voxy.client.core.vk;
 
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.vulkan.VulkanGpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.backend.vulkan.VulkanGpuTexture;
 import me.cortex.voxy.client.core.model.bakery.IAtlasTextureReader;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -21,7 +21,7 @@ import static org.lwjgl.vulkan.VK10.*;
 //Runs once at model-bakery construction, outside any frame, through the frame
 // ctx's immediate command buffer (submitted + waited synchronously). Assumes
 // MC creates the atlas with TRANSFER_SRC usage and keeps it in
-// SHADER_READ_ONLY_OPTIMAL between frames (validation layers flag both).
+// GENERAL between frames (validation layers flag both).
 public final class VkAtlasTextureReader extends IAtlasTextureReader {
     private final VkFrameCtx frameCtx;
 
@@ -36,9 +36,9 @@ public final class VkAtlasTextureReader extends IAtlasTextureReader {
         var staging = new VkBuffer(this.frameCtx, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
         try {
             var cmd = this.frameCtx.cmd();
-            //MC keeps the sampled atlas in SHADER_READ_ONLY_OPTIMAL; move mip 0 to
+            //MC keeps the sampled atlas in GENERAL; move mip 0 to
             // TRANSFER_SRC for the copy, then restore it so MC's sampling is unaffected.
-            transition(cmd, image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            transition(cmd, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
             try (MemoryStack stack = stackPush()) {
                 var region = VkBufferImageCopy.calloc(1, stack)
                         .bufferOffset(0).bufferRowLength(0).bufferImageHeight(0);
@@ -48,7 +48,7 @@ public final class VkAtlasTextureReader extends IAtlasTextureReader {
                 region.imageExtent().set(width, height, 1);
                 vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging.buffer, region);
             }
-            transition(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            transition(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
             this.frameCtx.flushImmediate();
 
             var out = new int[width * height];

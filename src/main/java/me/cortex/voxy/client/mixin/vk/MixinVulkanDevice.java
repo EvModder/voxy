@@ -1,6 +1,6 @@
 package me.cortex.voxy.client.mixin.vk;
 
-import com.mojang.blaze3d.vulkan.VulkanDevice;
+import com.mojang.renderpearl.backend.vulkan.VulkanDevice;
 import me.cortex.voxy.client.core.vk.MinecraftVkHost;
 import me.cortex.voxy.client.core.vk.MinecraftVkHostAdapter;
 import me.cortex.voxy.common.Logger;

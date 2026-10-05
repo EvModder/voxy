@@ -1,6 +1,6 @@
 package me.cortex.voxy.client.core.model.bakery;
 
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 
 //Backend-neutral readback of MC's stitched block atlas into a CPU int[]
 // (RGBA8, one int per texel, byte order R,G,B,A — identical for GL

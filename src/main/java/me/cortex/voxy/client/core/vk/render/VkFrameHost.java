@@ -1,9 +1,9 @@
 package me.cortex.voxy.client.core.vk.render;
 
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vulkan.VulkanConst;
-import com.mojang.blaze3d.vulkan.VulkanGpuTexture;
-import com.mojang.blaze3d.vulkan.VulkanGpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.renderpearl.backend.vulkan.VulkanConst;
+import com.mojang.renderpearl.backend.vulkan.VulkanGpuTexture;
+import com.mojang.renderpearl.backend.vulkan.VulkanGpuTextureView;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
@@ -37,7 +37,7 @@ public final class VkFrameHost {
     // samples it (FRAGMENT_SHADER read), so the previous ALL_COMMANDS masks
     // (which serialised the transition with unrelated compute) are narrowed.
     // Used to bracket sampling of MC's attachments mid-frame (they live in
-    // ATTACHMENT_OPTIMAL otherwise).
+    // GENERAL otherwise).
     public static void transitionMcImage(VkCommandBuffer cmd, GpuTextureView view,
                                           boolean depth, int oldLayout, int newLayout) {
         try (MemoryStack stack = stackPush()) {
@@ -74,7 +74,7 @@ public final class VkFrameHost {
                 }
             }
             int aspectMask = depth
-                    ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+                    ? VK_IMAGE_ASPECT_DEPTH_BIT | (view.texture().getFormat().hasStencilAspect() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0)
                     : VK_IMAGE_ASPECT_COLOR_BIT;
             var imb = VkImageMemoryBarrier.calloc(1, stack).sType$Default()
                     .srcAccessMask(srcAccess).dstAccessMask(dstAccess)

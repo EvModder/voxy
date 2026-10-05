@@ -3,12 +3,13 @@ plugins {
 }
 
 def includeOtherArchs = providers.gradleProperty('includeOtherArchs').getOrElse('false').toBoolean()
-def minecraftVersion = providers.gradleProperty('minecraft_version').get()
-def loaderVersion = providers.gradleProperty('loader_version').get()
-def fabricApiVersion = providers.gradleProperty('fabric_api_version').get()
-def sodiumDependency = providers.gradleProperty('sodium_version_modrinth').get()
-def sodiumExtraAllows = providers.gradleProperty('sodium_extra_allows').getOrElse('')
-def lwjglVersion = '3.4.1'
+def minecraftVersion = property('minecraft_version')
+def loaderVersion = property('loader_version')
+def fabricApiVersion = property('fabric_api_version')
+def sodiumDependency = property('sodium_version_modrinth')
+def sodiumExtraAllows = findProperty('sodium_extra_allows') ?: ''
+def lwjglVersion = '3.4.3'
+def lmdbVersion = lwjglVersion
 
 version = providers.gradleProperty('mod_version').get()
 group = providers.gradleProperty('maven_group').get()
@@ -137,7 +138,8 @@ processResources {
     var dirty = gitWorkingTreeDirty()
     var version = project.version
 
-    def props = ["version": version, "commit": hash, "dirty": dirty, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version]
+    def props = ["version": version, "commit": hash, "dirty": dirty, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version,
+                 "required_loader": ">=${loaderVersion}", "required_fabric_api": ">=${fabricApiVersion}"]
 
     for (var prop : props) {
         String value = prop.value;
@@ -186,9 +188,9 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
     implementation "maven.modrinth:sodium:${sodiumDependency}"
 
-    implementation "maven.modrinth:modmenu:${providers.gradleProperty('modmenu_version').get()}"
-    implementation "maven.modrinth:lithium:${providers.gradleProperty('lithium_version').get()}"
-    compileOnly "maven.modrinth:iris:${providers.gradleProperty('iris_version').get()}"
+    implementation "maven.modrinth:modmenu:${property('modmenu_version')}"
+    implementation "maven.modrinth:lithium:${property('lithium_version')}"
+    compileOnly "maven.modrinth:iris:${property('iris_version')}"
     compileOnly "maven.modrinth:chunky:${providers.gradleProperty('chunky_version').get()}"
     compileOnly "maven.modrinth:vivecraft:${providers.gradleProperty('vivecraft_version').get()}"
     compileOnly "maven.modrinth:flashback:${providers.gradleProperty('flashback_version').get()}"
@@ -204,18 +206,18 @@ dependencies {
     include(runtimeOnly("org.lwjgl:lwjgl-vulkan:${lwjglVersion}:natives-macos-arm64"))
 
     implementation platform("org.lwjgl:lwjgl-bom:${lwjglVersion}")
-    implementation "org.lwjgl:lwjgl:unsafe"
-    include(implementation "org.lwjgl:lwjgl-lmdb:unsafe")
-    include(implementation "org.lwjgl:lwjgl-zstd:unsafe")
+    implementation 'org.lwjgl:lwjgl'
+    include(implementation "org.lwjgl:lwjgl-lmdb:${lmdbVersion}")
+    include(implementation 'org.lwjgl:lwjgl-zstd')
     runtimeOnly "org.lwjgl:lwjgl:${lwjglVersion}:natives-windows"
     runtimeOnly "org.lwjgl:lwjgl:${lwjglVersion}:natives-linux"
-    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:${lwjglVersion}:natives-windows")
+    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:${lmdbVersion}:natives-windows")
     include(runtimeOnly "org.lwjgl:lwjgl-zstd:${lwjglVersion}:natives-windows")
-    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:${lwjglVersion}:natives-linux")
+    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:${lmdbVersion}:natives-linux")
     include(runtimeOnly "org.lwjgl:lwjgl-zstd:${lwjglVersion}:natives-linux")
-    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:${lwjglVersion}:natives-macos")
+    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:${lmdbVersion}:natives-macos")
     include(runtimeOnly "org.lwjgl:lwjgl-zstd:${lwjglVersion}:natives-macos")
-    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:${lwjglVersion}:natives-macos-arm64")
+    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:${lmdbVersion}:natives-macos-arm64")
     include(runtimeOnly "org.lwjgl:lwjgl-zstd:${lwjglVersion}:natives-macos-arm64")
     if (includeOtherArchs) {
         runtimeOnly "org.lwjgl:lwjgl:${lwjglVersion}:natives-linux-arm64"
@@ -224,15 +226,18 @@ dependencies {
     }
 
     // Embedded storage and compression libraries
-    include(implementation 'redis.clients:jedis:5.1.0')
-    include(implementation('org.rocksdb:rocksdbjni:10.2.1'))
-    include(implementation 'org.apache.commons:commons-pool2:2.12.0')
-    include(implementation 'org.lz4:lz4-java:1.8.0')
-    include(implementation('org.tukaani:xz:1.10'))
-    include(implementation('org.xerial:sqlite-jdbc:3.49.1.0'))
+    include(implementation 'redis.clients:jedis:8.0.1')
+    include(implementation 'redis.clients.authentication:redis-authx-core:0.2.0')
+    include(implementation 'org.json:json:20260814')
+    include(implementation('org.rocksdb:rocksdbjni:11.0.4'))
+    include(implementation 'org.apache.commons:commons-pool2:2.13.1')
+    include(implementation 'org.lz4:lz4-java:1.8.1')
+    include(implementation('org.tukaani:xz:1.12'))
+    include(implementation('org.xerial:sqlite-jdbc:3.53.4.0'))
 
-    testImplementation('org.junit.jupiter:junit-jupiter:5.12.2')
-    testRuntimeOnly('org.junit.platform:junit-platform-launcher:1.12.2')
+    testImplementation platform('org.junit:junit-bom:6.1.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 

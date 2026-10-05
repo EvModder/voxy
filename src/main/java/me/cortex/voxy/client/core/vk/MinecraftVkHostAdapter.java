@@ -1,6 +1,6 @@
 package me.cortex.voxy.client.core.vk;
 
-import com.mojang.blaze3d.vulkan.VulkanDevice;
+import com.mojang.renderpearl.backend.vulkan.VulkanDevice;
 import me.cortex.voxy.client.mixin.vk.AccessorVulkanCommandEncoder;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkDevice;

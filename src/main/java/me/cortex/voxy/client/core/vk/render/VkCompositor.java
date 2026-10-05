@@ -1,6 +1,6 @@
 package me.cortex.voxy.client.core.vk.render;
 
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.vk.VkBuffer;
@@ -141,7 +141,7 @@ public class VkCompositor {
 
         //MC depth -> sample-able
         VkFrameHost.transitionMcImage(cmd, rt.mcDepth, true,
-                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
         try (MemoryStack stack = stackPush()) {
             var colorAttach = VkRenderingAttachmentInfoKHR.calloc(1, stack).sType$Default()
@@ -187,7 +187,7 @@ public class VkCompositor {
 
         //MC depth back to attachment
         VkFrameHost.transitionMcImage(cmd, rt.mcDepth, true,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
     }
 
     /** Transition Voxy's offscreen targets for sampling (HiZ build / composite). */
@@ -261,12 +261,12 @@ public class VkCompositor {
         try (MemoryStack stack = stackPush()) {
             var colorAttach = VkRenderingAttachmentInfoKHR.calloc(1, stack).sType$Default()
                     .imageView(VkFrameHost.vkView(rt.mcColour))
-                    .imageLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                    .imageLayout(VK_IMAGE_LAYOUT_GENERAL)
                     .loadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
                     .storeOp(VK_ATTACHMENT_STORE_OP_STORE);
             var depthAttach = VkRenderingAttachmentInfoKHR.calloc(stack).sType$Default()
                     .imageView(VkFrameHost.vkView(rt.mcDepth))
-                    .imageLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                    .imageLayout(VK_IMAGE_LAYOUT_GENERAL)
                     .loadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
                     .storeOp(VK_ATTACHMENT_STORE_OP_STORE);
             var info = VkRenderingInfoKHR.calloc(stack).sType$Default()

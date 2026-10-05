@@ -614,15 +614,14 @@ public class Mapper {
                 if (compound.getIntOr("id", -1) != id) {
                     throw new IllegalStateException("Encoded id != expected id");
                 }
-                var bsc = compound.getCompound("block_state").orElseThrow();
+                var bsc = java.util.Objects.requireNonNull(compound.get("block_state"), "Missing block state");
                 var state = BlockState.CODEC.parse(NbtOps.INSTANCE, bsc);
                 if (state.isError()) {
                     Logger.info("Could not decode blockstate, attempting fixes, error: "+ state.error().get().message());
-                    bsc = (CompoundTag) DataFixers.getDataFixer().update(References.BLOCK_STATE, new Dynamic<>(NbtOps.INSTANCE,bsc),0, SharedConstants.getCurrentVersion().dataVersion().version()).getValue();
+                    bsc = DataFixers.getDataFixer().update(References.BLOCK_STATE, new Dynamic<>(NbtOps.INSTANCE,bsc),4671, SharedConstants.getCurrentVersion().dataVersion().version()).getValue();
                     state = BlockState.CODEC.parse(NbtOps.INSTANCE, bsc);
                     if (state.isError()) {
-                        Logger.error("Could not decode blockstate setting to air. id:" + id + " error: " + state.error().get().message());
-                        return new StateEntry(id, Blocks.AIR.defaultBlockState());
+                        throw new IllegalStateException("Could not decode stored block state " + id + ": " + state.error().get().message());
                     } else {
                         Logger.info("Fixed blockstate to: " + state.getOrThrow());
                         forceResave[0] |= true;

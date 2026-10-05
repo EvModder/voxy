@@ -1,9 +1,9 @@
 package me.cortex.voxy.client.mixin.sodium;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.opengl.GlTextureView;
-import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.backend.opengl.GlTextureView;
+import com.mojang.renderpearl.api.textures.GpuSampler;
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.rendering.Viewport;
@@ -26,14 +26,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = DefaultChunkRenderer.class, remap = false)
 public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
 
+    @org.spongepowered.asm.mixin.Shadow
+    @org.spongepowered.asm.mixin.Final
+    private boolean[] shouldDraw;
+
+    @Inject(method = "prepare", at = @At("TAIL"))
+    private void voxy$forceOpaque(ChunkRenderListIterable renderLists, CameraTransform camera, boolean indexedRenderingEnabled, CallbackInfo ci) {
+        var renderer = IVoxyRenderSystemHolder.getNullable();
+        if (renderer != null && !renderer.isVulkanBackend()) {
+            this.shouldDraw[DefaultTerrainRenderPasses.getPassIndex(DefaultTerrainRenderPasses.CUTOUT)] = true;
+        }
+    }
+
     public MixinDefaultChunkRenderer(ChunkVertexType vertexType) {
         super(vertexType);
     }
 
     @Inject(method = "render", at = @At(value = "HEAD"), cancellable = true)
-    private void voxy$cancelThingie(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
+    private void voxy$cancelThingie(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, com.mojang.renderpearl.api.commands.RenderPass pass, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, net.minecraft.client.renderer.oit.OitStage stage, CallbackInfo ci) {
         if (VoxyClient.disableSodiumChunkRender()) {
-            super.begin(renderPass, parameters, terrainSampler);
+            super.begin(renderPass, parameters, terrainSampler, stage);
             this.doRender(matrices, renderPass, camera, parameters);
             super.end(renderPass);
             ci.cancel();
@@ -41,7 +53,7 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
     }
 
     @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/ShaderChunkRenderer;end(Lnet/caffeinemc/mods/sodium/client/render/chunk/terrain/TerrainRenderPass;)V", shift = At.Shift.BEFORE))
-    private void voxy$injectRender(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, CallbackInfo ci) {
+    private void voxy$injectRender(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, com.mojang.renderpearl.api.commands.RenderPass pass, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, net.minecraft.client.renderer.oit.OitStage stage, CallbackInfo ci) {
         this.doRender(matrices, renderPass, camera, parameters);
     }
 
