@@ -72,13 +72,14 @@ public class PerThreadContextExecutor extends TrackedObject {
             this.exceptionHandler.accept(new IllegalStateException("Executor is in shutdown"));
             return false;
         }
-        var ctx = this.contexts.computeIfAbsent(THREAD_CTX.get(), this.contextFactory);
         try {
+            var ctx = this.contexts.computeIfAbsent(THREAD_CTX.get(), this.contextFactory);
             ctx.execute.run();
         } catch (Exception e) {
             this.exceptionHandler.accept(e);
+        } finally {
+            this.currentRunning.decrementAndGet();
         }
-        this.currentRunning.decrementAndGet();
         return true;
     }
 

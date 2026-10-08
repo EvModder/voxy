@@ -60,6 +60,7 @@ public class MemoryStorageBackend extends StorageBackend {
         synchronized (map) {
             var data = map.get(key);
             if (data != null) {
+                if (data.size > scratch.size) throw new IllegalStateException("Stored section exceeds scratch buffer: " + data.size);
                 data.cpyTo(scratch.address);
                 return scratch.subSize(data.size);
             } else {

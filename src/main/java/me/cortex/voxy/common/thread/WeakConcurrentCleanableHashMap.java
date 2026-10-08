@@ -53,18 +53,20 @@ public class WeakConcurrentCleanableHashMap<K extends LongSupplier, V> {
         var i2v = this.i2v[bucket];
         var lock = this.i2vLocks[bucket];
         lock.lock();
-        if (i2v.containsKey(id)) {
-            lock.unlock();
-            return i2v.get(id);
-        } else {
+        try {
+            if (i2v.containsKey(id)) return i2v.get(id);
             var v = valueOnAbsent.get();
             i2v.put(id, v);
             this.k2iLock.lock();
-            lock.unlock();
-            this.k2i.put(new WeakReference<>(key, this.cleanupQueue), id);
-            this.k2iLock.unlock();
+            try {
+                this.k2i.put(new WeakReference<>(key, this.cleanupQueue), id);
+            } finally {
+                this.k2iLock.unlock();
+            }
             this.count.incrementAndGet();
             return v;
+        } finally {
+            lock.unlock();
         }
     }
 

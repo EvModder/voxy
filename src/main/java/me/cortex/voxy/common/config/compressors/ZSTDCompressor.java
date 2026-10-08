@@ -41,6 +41,7 @@ public class ZSTDCompressor implements StorageCompressor {
     public MemoryBuffer compress(MemoryBuffer saveData) {
         var compressedData = SCRATCH.get(ZSTD_COMPRESSBOUND(saveData.size)).createUntrackedUnfreeableReference();
         long compressedSize = nZSTD_compressCCtx(COMPRESSION_CTX.get().ptr, compressedData.address, compressedData.size, saveData.address, saveData.size, this.level);
+        if (ZSTD_isError(compressedSize)) throw new IllegalStateException("ZSTD compression failed: " + ZSTD_getErrorName(compressedSize));
         return compressedData.subSize(compressedSize);
     }
 
@@ -48,7 +49,7 @@ public class ZSTDCompressor implements StorageCompressor {
     public MemoryBuffer decompress(MemoryBuffer saveData) {
         var decompressed = SCRATCH.get().createUntrackedUnfreeableReference();
         long size = nZSTD_decompressDCtx(DECOMPRESSION_CTX.get().ptr, decompressed.address, decompressed.size, saveData.address, saveData.size);
-        //TODO:FIXME: DONT ASSUME IT DOESNT FAIL
+        if (ZSTD_isError(size)) throw new IllegalStateException("ZSTD decompression failed: " + ZSTD_getErrorName(size));
         return decompressed.subSize(size);
     }
 
