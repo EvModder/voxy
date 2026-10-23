@@ -5,9 +5,10 @@ import me.cortex.voxy.common.util.MemoryBuffer;
 import org.lwjgl.system.MemoryUtil;
 
 
-//Has a base index buffer of 16380 quads, and also a 1 cube byte index buffer at the end
+//Full 16-bit quad-count range, with 32-bit vertex indices and a byte-indexed cube at the end.
 public class SharedIndexBuffer {
-    public static final int CUBE_INDEX_OFFSET = (1<<16)*6*2;
+    public static final int QUAD_CAPACITY = 1 << 16;
+    public static final int CUBE_INDEX_OFFSET = QUAD_CAPACITY*6*4;
     //Lazy: creating these does GL work, and this class must never touch the GPU
     // before a context exists (nor load at all when MC is on Vulkan).
     private static SharedIndexBuffer INSTANCE, INSTANCE_BYTE, INSTANCE_BB_BYTE;
@@ -27,13 +28,13 @@ public class SharedIndexBuffer {
     private final GlBuffer indexBuffer;
 
     public SharedIndexBuffer() {
-        this.indexBuffer = new GlBuffer((1<<16)*6*2 + 6*2*3);
-        var quadIndexBuff = generateQuadIndicesShort(16380);
+        this.indexBuffer = new GlBuffer(CUBE_INDEX_OFFSET + 6*2*3);
+        var quadIndexBuff = generateQuadIndicesInt(QUAD_CAPACITY);
         var cubeBuff = generateCubeIndexBuffer();
 
         long ptr = AbstractUploadStream.INSTANCE().upload(this.indexBuffer, 0, this.indexBuffer.size());
         quadIndexBuff.cpyTo(ptr);
-        cubeBuff.cpyTo((1<<16)*2*6 + ptr);
+        cubeBuff.cpyTo(CUBE_INDEX_OFFSET + ptr);
 
         quadIndexBuff.free();
         cubeBuff.free();
@@ -198,7 +199,7 @@ public class SharedIndexBuffer {
         return buffer;
     }
     public static MemoryBuffer generateQuadIndicesShort(int quadCount) {
-        if ((quadCount*4) >= 1<<16) {
+        if (quadCount < 0 || quadCount > (1<<14)) {
             throw new IllegalArgumentException("Quad count to large");
         }
         MemoryBuffer buffer = new MemoryBuffer(quadCount * 6L * 2);
@@ -218,12 +219,14 @@ public class SharedIndexBuffer {
     }
 
     public static MemoryBuffer generateQuadIndicesInt(int quadCount) {
-        MemoryBuffer buffer = new MemoryBuffer(quadCount * 6L * 2);
+        if (quadCount < 0 || quadCount > Integer.MAX_VALUE / 4) throw new IllegalArgumentException("Quad count too large");
+        MemoryBuffer buffer = new MemoryBuffer(quadCount * 6L * 4);
         long ptr = buffer.address;
         for(int i = 0; i < quadCount*4; i += 4) {
-            MemoryUtil.memPutInt(ptr + (0*4), i);
-            MemoryUtil.memPutInt(ptr + (1*4), (i + 1));
-            MemoryUtil.memPutInt(ptr + (2*4), (i + 2));
+            // Both triangles must start at corner 1: only it initializes flat shader attributes.
+            MemoryUtil.memPutInt(ptr + (0*4), (i + 1));
+            MemoryUtil.memPutInt(ptr + (1*4), (i + 2));
+            MemoryUtil.memPutInt(ptr + (2*4), i);
             MemoryUtil.memPutInt(ptr + (3*4), (i + 1));
             MemoryUtil.memPutInt(ptr + (4*4), (i + 3));
             MemoryUtil.memPutInt(ptr + (5*4), (i + 2));

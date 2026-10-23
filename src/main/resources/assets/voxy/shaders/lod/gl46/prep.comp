@@ -21,9 +21,9 @@ void main() {
 #ifdef VOXY_VULKAN
     //VK shared index buffer stores the cube indices as uint16 (no ubyte index type);
     // firstIndex is in u16 units at the same byte offset
-    cullDrawIndirectCommand.firstIndex = (1<<16)*6;
+    cullDrawIndirectCommand.firstIndex = CUBE_INDEX_OFFSET / 2;
 #else
-    cullDrawIndirectCommand.firstIndex = (1<<16)*6*2;
+    cullDrawIndirectCommand.firstIndex = CUBE_INDEX_OFFSET;
 #endif
     cullDrawIndirectCommand.baseVertex = 0;
     cullDrawIndirectCommand.baseInstance = 0;

@@ -19,7 +19,7 @@ layout(binding = OUTPUT_BUFFER_BINDING, std430) restrict volatile buffer Minimum
 
 //Returns the id of the max value
 uint atomicDerefMaxExchangeGlobal(uint atId, uint id) {
-    const uint value = visibility[id];
+    const uint value = visibility[id&((1u<<31)-1)];
     while (true) {
         const uint existingId = minVisIds[atId];//TODO: check that this does what we want, and that it obtains the value of atValue, at this point
         if (existingId == id) {//If we are trying to insert self, return -1
@@ -58,7 +58,8 @@ shared uint initalSort[OUTPUT_SIZE];
 
 //Returns the id of the max value
 uint atomicDerefMaxExchangeLocal(uint atId, uint id) {
-    const uint value = visibility[id];
+    //Displaced entries may carry the external-ID flag from the initial global copy.
+    const uint value = visibility[id&((1u<<31)-1)];
     while (true) {
         const uint existingId = initalSort[atId];//TODO: check that this does what we want, and that it obtains the value of atValue, at this point
         if (existingId == id) {//If we are trying to insert self, return -1
@@ -82,12 +83,13 @@ uint atomicDerefMaxExchangeLocal(uint atId, uint id) {
 void bubbleSortInital(uint vis, uint id) {
     uint start = 0;
     //Fast path cut out half the ops
-    if (visibility[initalSort[(OUTPUT_SIZE-1)>>1]] <= vis) {//Check if we are more than half way
+    if (visibility[initalSort[(OUTPUT_SIZE-1)>>1]&((1u<<31)-1)] <= vis) {//Check if we are more than half way
         start = (OUTPUT_SIZE-1)>>1;
     }
 
     for (uint i = start; i < OUTPUT_SIZE; i++) {
         id = atomicDerefMaxExchangeLocal(i, id);
+        if (id == uint(-1)) break;
     }
 }
 

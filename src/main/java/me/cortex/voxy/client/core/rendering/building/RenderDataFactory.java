@@ -1789,7 +1789,7 @@ public class RenderDataFactory {
             return BuiltSection.emptyWithChildren(section.key, section.getNonEmptyChildren());
         }
 
-        if (this.quadCount >= MAX_QUADS_PER_BUFFER || this.droppedQuads != 0) {
+        if (this.droppedQuads != 0) {
             //Report per buffer, not just the total: the total crossing 65536 is harmless when it
             //is spread across the 8 buffers, whereas a single buffer reaching the cap is the case
             //that used to corrupt neighbouring geometry.

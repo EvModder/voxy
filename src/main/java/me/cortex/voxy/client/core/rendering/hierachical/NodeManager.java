@@ -237,7 +237,7 @@ public class NodeManager {
                 if (this.nodeData.isNodeGeometryInFlight(nodeId)) {
                     throw new IllegalStateException();
                 }
-                Logger.warn("Recieved geometry update but not watching it, discarding");
+                //A completed build can arrive after eviction or after the section leaves the watched area.
                 sectionResult.free();
                 return true;
             }

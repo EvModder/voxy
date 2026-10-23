@@ -81,10 +81,10 @@ public class VkTerrainRenderer {
         this.uniform = new VkBuffer(ctx, 1024).zero();
         this.distanceCountBuffer = new VkBuffer(ctx, 1024L * 4 + VkViewport.TRANSLUCENT_DRAW_COUNT * 4L).zero();
 
-        //Shared index buffer: u16 quad pattern + u16 cube indices at CUBE_INDEX_OFFSET
+        //Terrain uses u32 indices; the occlusion cube retains u16 indices at CUBE_INDEX_OFFSET.
         this.indexBuffer = new VkBuffer(ctx, SharedIndexBuffer.CUBE_INDEX_OFFSET + 6 * 2 * 3 * 2L);
         {
-            var quads = SharedIndexBuffer.generateQuadIndicesShort(16380);
+            var quads = SharedIndexBuffer.generateQuadIndicesInt(SharedIndexBuffer.QUAD_CAPACITY);
             long ptr = uploadStream.upload(this.indexBuffer, 0, this.indexBuffer.size());
             quads.cpyTo(ptr);
             VkCmd.writeCubeIndicesU16(ptr + SharedIndexBuffer.CUBE_INDEX_OFFSET);
@@ -97,7 +97,8 @@ public class VkTerrainRenderer {
 
         //================= compute pipelines =================
         this.prep = new VkShaderPipeline(ctx, "prep.comp",
-                VkShaderSource.load("voxy:lod/gl46/prep.comp", VkShaderSource.defs().build()),
+                VkShaderSource.load("voxy:lod/gl46/prep.comp", VkShaderSource.defs()
+                        .def("CUBE_INDEX_OFFSET", SharedIndexBuffer.CUBE_INDEX_OFFSET).build()),
                 0, List.of(VkShaderPipeline.ubo(0), VkShaderPipeline.ssbo(1), VkShaderPipeline.ssbo(2)));
 
         this.cmdGen = new VkShaderPipeline(ctx, "cmdgen.comp",
@@ -443,7 +444,7 @@ public class VkTerrainRenderer {
                     .sampler(10, viewport.depthBoundSampleView, this.depthBoundSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
                     .push(cmd);
         }
-        vkCmdBindIndexBuffer(cmd, this.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(cmd, this.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
         if (this.ctx.vk().hasDrawIndirectCount) {
             //Tight-count path: the GPU reads the actual draw count from the count
             // buffer each frame. Requires the drawIndirectCount Vulkan 1.2 feature
