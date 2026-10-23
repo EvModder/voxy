@@ -58,6 +58,7 @@ public class VkRenderCore {
     private final VkTerrainRenderer terrainRenderer;
     private final VkCompositor compositor;
     private final VkSSAO ssao;
+    private final VkBeaconRenderer beacons;
     private final VkBoundRenderer boundRenderer;
     private final StreamedBoundStore visibleSectionStream;
     private boolean shutDown = false;
@@ -102,6 +103,7 @@ public class VkRenderCore {
             this.compositor = new VkCompositor(this.frameCtx, this.uploadStream, this.properties,
                     VoxyConfig.CONFIG.useEnvironmentalFog);
             this.ssao = new VkSSAO(this.frameCtx, this.uploadStream, this.properties, VoxyConfig.CONFIG.getSSAOMode());
+            this.beacons = new VkBeaconRenderer(this.frameCtx, this.uploadStream, this.properties);
             //Depth-bound culling: Sodium's visibility mixins feed the store; the bound
             // renderer rasters visible-chunk AABBs into the depth-bound image so the
             // terrain shaders can discard LOD fragments vanilla terrain will cover.
@@ -213,6 +215,7 @@ public class VkRenderCore {
             // opaque->temporal->SSAO->translucent order as the GL pipeline
             this.terrainRenderer.renderTemporal(viewport);
             this.ssao.compute(viewport, rt);
+            this.beacons.render(viewport);
             this.terrainRenderer.renderTranslucent(viewport);
 
             //6. composite into MC's frame
@@ -295,6 +298,7 @@ public class VkRenderCore {
                 this.geometryData.free();
                 this.terrainRenderer.free();
                 this.ssao.free();
+                this.beacons.free();
                 this.compositor.free();
                 this.viewportSelector.free();
                 this.uploadStream.free();

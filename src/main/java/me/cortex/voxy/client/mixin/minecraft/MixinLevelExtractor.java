@@ -1,10 +1,12 @@
 package me.cortex.voxy.client.mixin.minecraft;
 
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
+import me.cortex.voxy.client.beacon.DistantBeacons;
 import me.cortex.voxy.client.core.util.RendererReloadTracker;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,11 +22,23 @@ public class MixinLevelExtractor {
     @Final
     private LevelRenderer levelRenderer;
 
+    @Shadow @Final
+    private LevelRenderState levelRenderState;
+
+    @Shadow
+    private ClientLevel level;
+
+    @Inject(method = "extract", at = @At("TAIL"))
+    private void voxy$extractBeacons(CallbackInfo ci) {
+        DistantBeacons.extract(this.level, this.levelRenderState);
+    }
+
     @Unique
     private final RendererReloadTracker voxy$reloadTracker = new RendererReloadTracker();
 
     @Inject(method = "setLevel", at = @At("HEAD"))
     private void voxy$onSetLevel(ClientLevel level, CallbackInfo cir) {
+        DistantBeacons.clearFrame(this.levelRenderState);
         this.voxy$reloadTracker.onLevelChanged();
         ((IVoxyRenderSystemHolder)this.levelRenderer).voxy$setWorld(level);
     }

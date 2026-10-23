@@ -120,6 +120,11 @@ public class VoxyConfigMenu implements ConfigEntryPoint {
                                         .setImpact(OptionImpact.MEDIUM)
                         ), new Group(
                                 new BoolOption(
+                                        "voxy:distant_beacon_beams",
+                                        Component.translatable("voxy.config.general.distant_beacon_beams"),
+                                        ()->CFG.distantBeaconBeams, v->CFG.distantBeaconBeams=v)
+                        ).setEnablerInherit(s->!IrisUtil.irisShadersEnabledInConfig(), ConfigState.UPDATE_ON_REBUILD), new Group(
+                                new BoolOption(
                                         "voxy:eviromental_fog",
                                         Component.translatable("voxy.config.general.environmental_fog"),
                                         ()->CFG.useEnvironmentalFog, v->CFG.useEnvironmentalFog=v)

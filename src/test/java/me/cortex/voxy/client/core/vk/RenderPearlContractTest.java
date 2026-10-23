@@ -18,7 +18,8 @@ class RenderPearlContractTest {
     @Test
     void bundledShadercCompilesTheHostCompositor() {
         var definitions = java.util.Map.of("USE_REVERSE_Z", "", "USE_ZERO_ONE_DEPTH", "", "EMIT_COLOUR", "");
-        for (String shader : List.of("post/fullscreen2.vert", "post/setup_stencil_depth.frag", "post/blit_texture_depth_cutout.frag")) {
+        for (String shader : List.of("post/fullscreen2.vert", "post/setup_stencil_depth.frag", "post/blit_texture_depth_cutout.frag",
+                "beacon/beam.vert", "beacon/beam.frag")) {
             var type = shader.endsWith(".vert") ? me.cortex.voxy.client.core.gl.shader.ShaderType.VERTEX
                     : me.cortex.voxy.client.core.gl.shader.ShaderType.FRAGMENT;
             var spirv = ShadercCompiler.compile(VkShaderSource.load("voxy:" + shader, definitions), type, shader);

@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core;
 
 import me.cortex.voxy.client.config.VoxyConfig;
+import me.cortex.voxy.client.beacon.GlBeaconRenderer;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.rendering.Viewport;
@@ -28,6 +29,7 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
     private final FullscreenBlit finalBlit;
 
     private final SSAO ssao;
+    private final GlBeaconRenderer beacons = new GlBeaconRenderer();
 
     protected NormalRenderPipeline(RenderProperties properties, AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, HierarchicalOcclusionTraverser traversal, BooleanSupplier frexSupplier) {
         super(properties, nodeManager, nodeCleaner, traversal, frexSupplier, false);
@@ -71,6 +73,7 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
         GPUTiming.INSTANCE.marker("ao");
         this.ssao.computeSSAO(viewport, this.colourSSAOTex, this.colourTex, this.fb.getDepthTex(), sourceDepthTexture);
         glBindFramebuffer(GL_FRAMEBUFFER, this.fbSSAO.id);
+        this.beacons.render(viewport, this.properties);
     }
 
     @Override
@@ -122,6 +125,7 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
 
     @Override
     public void free() {
+        this.beacons.free();
         this.finalBlit.delete();
         this.ssao.free();
         this.fbSSAO.free();

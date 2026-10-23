@@ -19,6 +19,9 @@
   "voxy.config.general.rendering": "Voxy Rendering",
   "voxy.config.general.rendering.tooltip": "Enables or disables voxy rendering",
 
+  "voxy.config.general.distant_beacon_beams": "Distant beacon beams",
+  "voxy.config.general.distant_beacon_beams.tooltip": "Renders previously visited beacon beams beyond vanilla range. Saved between sessions; refreshed when revisited. Not supported with Iris shader packs.",
+
   "voxy.config.general.subDivisionSize": "Pixels^2 of subdivision size",
   "voxy.config.general.subDivisionSize.tooltip": "Maximum size in pixels (squared) of screenspace AABB before subdiving to smaller LoDs (Smaller being higher quality)",
 

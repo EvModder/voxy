@@ -18,6 +18,7 @@ A fork of [MCRcortex/voxy](https://github.com/MCRcortex/voxy) for Minecraft 26.2
 - Automatically upgrades older LMDB databases while preserving the originals.
 - Batches durable LoD saves on a dedicated worker, leaving terrain workers available.
 - Adds server name and proxy aliasing for stable shared storage of LoDs.
+- Renders beacon beams in Voxy's distant terrain.
 - Builds every push as a 90-day artifact and retains the [latest successful build](https://github.com/EvModder/voxy/releases/download/latest-build/voxy-latest.jar).
 
 Voxy generates `.voxy/server_aliases.json` on first use.<br>

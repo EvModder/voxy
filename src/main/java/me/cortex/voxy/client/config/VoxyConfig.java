@@ -28,6 +28,7 @@ public class VoxyConfig {
 
     public boolean enabled = true;
     public boolean enableRendering = true;
+    public boolean distantBeaconBeams = true;
     public boolean ingestEnabled = true;
     public float sectionRenderDistance = 16;
     public int serviceThreads = (int) Math.max(CpuLayout.getCoreCount()/1.5, 1);

@@ -1,6 +1,7 @@
 package me.cortex.voxy.client;
 
 import me.cortex.voxy.client.compat.FlashbackCompat;
+import me.cortex.voxy.client.beacon.DistantBeacons;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.RenderResourceReuse;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
@@ -20,6 +21,7 @@ import net.minecraft.world.level.storage.LevelResource;
 import java.nio.file.Path;
 
 public class VoxyClientInstance extends VoxyInstance {
+    public final DistantBeacons beacons;
     private final Config config;
     private final Path basePath;
     private final boolean noIngestOverride;
@@ -42,6 +44,7 @@ public class VoxyClientInstance extends VoxyInstance {
                     basePath);
         }
         super();
+        this.beacons = new DistantBeacons(this.basePath);
         this.updateDedicatedThreads();
     }
 
@@ -91,6 +94,8 @@ public class VoxyClientInstance extends VoxyInstance {
     }
 
     void tickStorageCatchUp() {
+        var currentLevel = Minecraft.getInstance().level;
+        this.beacons.tick(currentLevel, VoxyConfig.CONFIG.enabled && this.isIngestEnabled(WorldIdentifier.of(currentLevel)));
         if (this.catchUpIndex < 0) return;
         var level = Minecraft.getInstance().level;
         if (!this.catchUpWorld.equals(WorldIdentifier.of(level)) || !this.isIngestEnabled(this.catchUpWorld)) {
@@ -122,6 +127,7 @@ public class VoxyClientInstance extends VoxyInstance {
 
     @Override
     public void shutdown() {
+        this.beacons.close();
         this.pendingStorage.close();
         super.shutdown();
         //Free the render resources cache since the entire instance is freed
