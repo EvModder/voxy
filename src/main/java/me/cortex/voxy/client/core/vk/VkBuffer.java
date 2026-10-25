@@ -44,15 +44,16 @@ public class VkBuffer extends TrackedObject implements IDeviceBuffer, IRenderLis
         this.ctx = ctx;
         this.size = size;
         var vctx = ctx.vk();
+        long buffer = VK_NULL_HANDLE, memory = VK_NULL_HANDLE;
         try (MemoryStack stack = stackPush()) {
             var bci = VkBufferCreateInfo.calloc(stack).sType$Default()
                     .size(size).usage(usage).sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             var pBuf = stack.mallocLong(1);
             check(vkCreateBuffer(vctx.device, bci, null, pBuf), "vkCreateBuffer");
-            this.buffer = pBuf.get(0);
+            buffer = pBuf.get(0);
 
             var req = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(vctx.device, this.buffer, req);
+            vkGetBufferMemoryRequirements(vctx.device, buffer, req);
             int props = hostVisible
                     ? (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
                     : VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -61,9 +62,17 @@ public class VkBuffer extends TrackedObject implements IDeviceBuffer, IRenderLis
                     .memoryTypeIndex(vctx.findMemoryType(req.memoryTypeBits(), props));
             var pMem = stack.mallocLong(1);
             check(vkAllocateMemory(vctx.device, mai, null, pMem), "vkAllocateMemory");
-            this.memory = pMem.get(0);
-            check(vkBindBufferMemory(vctx.device, this.buffer, this.memory, 0), "vkBindBufferMemory");
+            memory = pMem.get(0);
+            check(vkBindBufferMemory(vctx.device, buffer, memory, 0), "vkBindBufferMemory");
+        } catch (RuntimeException | Error e) {
+            // Construction has not published either handle or recorded GPU work using them.
+            if (buffer != VK_NULL_HANDLE) vkDestroyBuffer(vctx.device, buffer, null);
+            if (memory != VK_NULL_HANDLE) vkFreeMemory(vctx.device, memory, null);
+            this.free0();
+            throw e;
         }
+        this.buffer = buffer;
+        this.memory = memory;
         COUNT++;
         TOTAL_SIZE += size;
     }

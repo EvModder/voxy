@@ -149,7 +149,8 @@ public final class VkFrameCtx {
         while (!this.inFlight.isEmpty()) {
             var frame = this.inFlight.peek();
             int status = vkGetEventStatus(this.ctx.device, frame.event);
-            if (status != VK_EVENT_SET) break;
+            if (status == VK_EVENT_RESET) break;
+            if (status != VK_EVENT_SET) check(status, "vkGetEventStatus");
             this.inFlight.pop();
             check(vkResetEvent(this.ctx.device, frame.event), "vkResetEvent");
             this.eventPool.add(frame.event);
@@ -163,13 +164,19 @@ public final class VkFrameCtx {
 
     /** Hard sync: device idle, then retire EVERYTHING (shutdown / teardown). */
     public void waitIdleRetireAll() {
+        // Device idle does not submit MC's command buffer. Never recycle its live staging data.
+        if (this.frameCmd != null) throw new IllegalStateException("Cannot retire an unsubmitted Voxy frame");
         this.flushImmediate();
-        vkDeviceWaitIdle(this.ctx.device);
+        check(vkDeviceWaitIdle(this.ctx.device), "vkDeviceWaitIdle");
+        for (var frame : this.inFlight) {
+            int status = vkGetEventStatus(this.ctx.device, frame.event);
+            if (status == VK_EVENT_RESET) throw new IllegalStateException("Voxy frame has not been submitted before teardown");
+            if (status != VK_EVENT_SET) check(status, "vkGetEventStatus(teardown)");
+        }
         while (!this.inFlight.isEmpty()) {
             vkDestroyEvent(this.ctx.device, this.inFlight.pop().event, null);
         }
-        //Device is idle: every recorded frame — including the one currently being
-        // recorded — has completed, so even current-frame-tagged destroys are safe.
+        //No active frame: submitted work and flushed immediate commands have completed.
         this.retiredCounter = this.frameCounter;
         this.runRetirement();
     }

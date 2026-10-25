@@ -228,7 +228,6 @@ public class VkTerrainRenderer {
     public void buildDrawCalls(VkViewport viewport) {
         if (this.geometry.getSectionCount() == 0) return;
         var cmd = this.ctx.cmd();
-        this.uploadUniform(viewport);
 
         if (!this.ctx.vk().hasDrawIndirectCount) {
             //Fixed-count fallback (MoltenVK): renderTerrain issues
@@ -397,8 +396,9 @@ public class VkTerrainRenderer {
         // ensure here when the count is momentarily 0, those calls would bind a null
         // pipeline. ensureTerrainPipelines is idempotent (no-op once built for the format).
         this.ensureTerrainPipelines(viewport);
-        if (this.geometry.getSectionCount() == 0) return;
+        // Upload once for all passes, even if node updates introduce the first geometry below.
         this.uploadUniform(viewport);
+        if (this.geometry.getSectionCount() == 0) return;
         int cap = Math.min((int) (this.geometry.getSectionCount() * 4.4 + 128), VkViewport.OPAQUE_DRAW_COUNT);
         int maxDraw = this.fixedCountBudget(this.fbOpaqueDraws, 1024, cap);
         this.renderTerrain(viewport, viewport.colour.view, this.terrainOpaque, 0, 4 * 3, maxDraw, clearTargets);
