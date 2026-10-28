@@ -103,6 +103,7 @@ public class VkTerrainRenderer {
 
         this.cmdGen = new VkShaderPipeline(ctx, "cmdgen.comp",
                 VkShaderSource.load("voxy:lod/gl46/cmdgen.comp", VkShaderSource.defs()
+                        .defIf("MERGE_OPAQUE_DRAWS", !ctx.vk().hasDrawIndirectCount)
                         .def("TRANSLUCENT_WRITE_BASE", 1024)
                         .def("TEMPORAL_OFFSET", TEMPORAL_OFFSET)
                         .def("MAX_OPAQUE_DRAWS", VkViewport.OPAQUE_DRAW_COUNT)

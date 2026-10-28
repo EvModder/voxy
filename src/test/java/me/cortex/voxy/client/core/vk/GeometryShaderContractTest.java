@@ -8,6 +8,21 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class GeometryShaderContractTest {
     @Test
+    void opaqueCommandMergingCompilesAlongsideTheUnmodifiedPath() {
+        for (int variant = 0; variant < 4; variant++) {
+            var defines = VkShaderSource.defs()
+                    .defIf("MERGE_OPAQUE_DRAWS", (variant & 1) != 0)
+                    .defIf("HAS_STATISTICS", (variant & 2) != 0)
+                    .def("STATISTICS_BUFFER_BINDING", 8)
+                    .def("TRANSLUCENT_WRITE_BASE", 1024).def("TEMPORAL_OFFSET", 500000)
+                    .def("MAX_OPAQUE_DRAWS", 400000).def("MAX_TRANSLUCENT_DRAWS", 100000)
+                    .def("MAX_TEMPORAL_DRAWS", 100000).def("TRANSLUCENT_DISTANCE_BUFFER_BINDING", 7);
+            var source = VkShaderSource.load("voxy:lod/gl46/cmdgen.comp", defines.build());
+            assertTrue(ShadercCompiler.compile(source, ShaderType.COMPUTE, "cmdgen").remaining() > 20);
+        }
+    }
+
+    @Test
     void cullingOffsetMatchesTheExpandedTerrainIndexBuffer() {
         var source = VkShaderSource.load("voxy:lod/gl46/prep.comp", VkShaderSource.defs()
                 .def("CUBE_INDEX_OFFSET", SharedIndexBuffer.CUBE_INDEX_OFFSET).build());

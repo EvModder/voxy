@@ -14,6 +14,10 @@ layout(local_size_x = 128) in;
 #import <voxy:lod/section.glsl>
 #import <voxy:lod/gl46/bindings.glsl>
 
+#ifdef MERGE_OPAQUE_DRAWS
+#import <voxy:lod/gl46/opaque_ranges.glsl>
+#endif
+
 //https://github.com/KhronosGroup/GLSL/blob/master/extensions/ext/GL_EXT_shader_16bit_storage.txt
 // adds support for uint8_t which can use for compact visibility buffer
 
@@ -105,7 +109,12 @@ void main() {
         msk |= uint(((counts.x>>16)&0xFFFFu)!=0)<<6;
 
 
+        #ifdef MERGE_OPAQUE_DRAWS
+        uvec2 opaqueRanges[7];
+        uint cmdCnt = buildOpaqueRanges(counts, msk, ptr, opaqueRanges);
+        #else
         uint cmdCnt = bitCount(msk);
+        #endif
         uint cmdPtr = atomicAdd(opaqueDrawCount, cmdCnt);
         bool opaqueInBounds = cmdPtr <= uint(MAX_OPAQUE_DRAWS)
                 && cmdCnt <= uint(MAX_OPAQUE_DRAWS) - cmdPtr;
@@ -143,6 +152,16 @@ void main() {
         }
         ptr += count;
 
+        #ifdef MERGE_OPAQUE_DRAWS
+        for (uint range = 0; range < cmdCnt; range++) {
+            uvec2 geometry = opaqueRanges[range];
+            if (opaqueInBounds) writeCmd(cmdPtr++, drawId, geometry.x, geometry.y);
+            if (renderTemporally && temporalInBounds) writeCmd(tCmdPtr++, drawId, geometry.x, geometry.y);
+            #ifdef HAS_STATISTICS
+            totalQuads += geometry.y;
+            #endif
+        }
+        #else
         //Double sided quads
         count = (counts.x>>16)&0xFFFFu;
         if (count != 0) {
@@ -247,6 +266,8 @@ void main() {
             #endif
         }
         ptr += count;
+
+        #endif
 
         #ifdef HAS_STATISTICS
         atomicAdd(quadCounts[detail], totalQuads);
