@@ -112,21 +112,9 @@ if (!sodiumVersionMatcher.matches()) {
 def sodiumVersion = sodiumVersionMatcher[0][1]
 
 processResources {
-    String sodium_versions;
-    {
-        StringBuilder sodium_versions_builder = new StringBuilder("[");
-        var vers = sodiumExtraAllows.split(" ")
-        for (String ver : vers) {
-            if (!ver.isBlank()) {
-                sodium_versions_builder.append("\"=").append(ver).append("\", ");
-            }
-        }
-
-        var compatibleSodiumVersion = sodiumVersion.split("-")[0]
-        sodium_versions_builder.append("\">=").append(compatibleSodiumVersion).append("- <=").append(compatibleSodiumVersion).append("\"")
-        sodium_versions_builder.append("]");
-        sodium_versions = sodium_versions_builder.toString();
-    }
+    String sodium_versions = groovy.json.JsonOutput.toJson(
+            [project.property('sodium_compatible_versions')] + sodiumExtraAllows.split(" ")
+                    .findAll { !it.isBlank() }.collect { "=$it" })
     String allowed_mc_version;
     {
         allowed_mc_version = minecraftVersion.split("-")[0]
