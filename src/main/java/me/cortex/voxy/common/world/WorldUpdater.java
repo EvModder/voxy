@@ -35,11 +35,11 @@ public class WorldUpdater {
 
             long status = insertSectionLvlIntoWorld(section, worldSection);
             boolean didStateChange = (status&1)==1;
-            int airCount = (int) ((status>>1)&0x1FFF);
+            int nonAirCount = (int) ((status>>1)&0x1FFF);
 
 
             if (lvl == 0) {
-                int nonAirCountDelta = section.lvl0NonAirCount-(4096-airCount);
+                int nonAirCountDelta = section.lvl0NonAirCount-nonAirCount;
                 if (nonAirCountDelta != 0) {
                     worldSection.addNonEmptyBlockCount(nonAirCountDelta);
                     emptinessStateChange = worldSection.updateLvl0State() ? 2 : 0;
@@ -99,7 +99,7 @@ public class WorldUpdater {
         final int by = (section.y&msk)<<(4-lvl);
         final int bz = (section.z&msk)<<(4-lvl);
 
-        int airCount = 0;
+        int nonAirCount = 0;
         boolean didStateChange = false;
 
 
@@ -157,10 +157,10 @@ public class WorldUpdater {
                     long oldId2 = secD[cSecIdx+2]; secD[cSecIdx+2] = vdat[i+2];
                     long oldId3 = secD[cSecIdx+3]; secD[cSecIdx+3] = vdat[i+3];
 
-                    airCount += Mapper.isAir(oldId0)?1:0; didStateChange |= vdat[i+0] != oldId0;
-                    airCount += Mapper.isAir(oldId1)?1:0; didStateChange |= vdat[i+1] != oldId1;
-                    airCount += Mapper.isAir(oldId2)?1:0; didStateChange |= vdat[i+2] != oldId2;
-                    airCount += Mapper.isAir(oldId3)?1:0; didStateChange |= vdat[i+3] != oldId3;
+                    nonAirCount += Mapper.isNotAirInt(oldId0); didStateChange |= vdat[i+0] != oldId0;
+                    nonAirCount += Mapper.isNotAirInt(oldId1); didStateChange |= vdat[i+1] != oldId1;
+                    nonAirCount += Mapper.isNotAirInt(oldId2); didStateChange |= vdat[i+2] != oldId2;
+                    nonAirCount += Mapper.isNotAirInt(oldId3); didStateChange |= vdat[i+3] != oldId3;
                 }
             } else {
                 int baseVIdx = VoxelizedSection.getBaseIndexForLevel(lvl);
@@ -184,7 +184,7 @@ public class WorldUpdater {
 
         long status = 0;
         status |= didStateChange?1:0;
-        status |= Integer.toUnsignedLong(airCount)<<1;//VERY VERY VERY IMPORTANT NOTE: IS 13 BITS BIG NOT 12 BITS (since it can be 4096 which is 6 bits large)
+        status |= Integer.toUnsignedLong(nonAirCount)<<1;//VERY VERY VERY IMPORTANT NOTE: IS 13 BITS BIG NOT 12 BITS (since it can be 4096 which is 6 bits large)
         return status;
     }
 }

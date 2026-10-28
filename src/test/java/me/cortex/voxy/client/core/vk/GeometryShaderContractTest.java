@@ -8,6 +8,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class GeometryShaderContractTest {
     @Test
+    void fullscreenDepthShadersCompileForBothDepthConventions() {
+        for (int variant = 0; variant < 4; variant++) {
+            var defines = VkShaderSource.defs()
+                    .defIf("USE_ZERO_ONE_DEPTH", (variant & 1) != 0)
+                    .defIf("USE_REVERSE_Z", (variant & 2) != 0)
+                    .def("EMIT_COLOUR").def("USE_ENV_FOG").build();
+            var vertex = VkShaderSource.load("voxy:post/fullscreen2.vert", defines);
+            var fragment = VkShaderSource.load("voxy:post/blit_texture_depth_cutout.frag", defines);
+            assertTrue(ShadercCompiler.compile(vertex, ShaderType.VERTEX, "fullscreen2").remaining() > 20);
+            assertTrue(ShadercCompiler.compile(fragment, ShaderType.FRAGMENT, "composite").remaining() > 20);
+        }
+    }
+
+    @Test
     void opaqueCommandMergingCompilesAlongsideTheUnmodifiedPath() {
         for (int variant = 0; variant < 4; variant++) {
             var defines = VkShaderSource.defs()

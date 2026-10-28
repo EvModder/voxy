@@ -1,7 +1,7 @@
 package me.cortex.voxy.client.mixin.iris;
 
-import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
 import me.cortex.voxy.client.core.util.IrisUtil;
 import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;

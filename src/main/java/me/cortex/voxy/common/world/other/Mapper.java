@@ -85,6 +85,10 @@ public class Mapper {
         return (int) ((id>>27)&((1<<20)-1));
     }
 
+    public static int isNotAirInt(long id) {
+        return Math.min(getBlockId(id), 1);
+    }
+
     public static int getBiomeId(long id) {
         return (int) ((id>>47)&0x1FF);
     }
