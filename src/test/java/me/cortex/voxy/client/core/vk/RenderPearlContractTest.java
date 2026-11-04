@@ -13,8 +13,62 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.lwjgl.vulkan.VK10.*;
 
 class RenderPearlContractTest {
+    @Test
+    void ssaoTransitionsCoverComputeAndRestoreMinecraftLayout() throws IOException {
+        var ssao = read("me/cortex/voxy/client/core/vk/render/VkSSAO");
+        var compute = ssao.methods.stream().filter(m -> m.name.equals("compute")).findFirst().orElseThrow();
+        int hostCalls = 0, depthCalls = 0, outputCalls = 0;
+        for (var instruction : compute.instructions) {
+            if (!(instruction instanceof MethodInsnNode call)) continue;
+            if (call.name.equals("transitionMcImage")) {
+                assertTrue(call.desc.endsWith("ZIII)V"));
+                var args = trailingConstants(call, 3);
+                assertArrayEquals(hostCalls++ == 0
+                                ? new int[]{VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT}
+                                : new int[]{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT}, args,
+                        "Minecraft depth must use GENERAL, sampled by COMPUTE in both directions");
+            } else if (call.owner.endsWith("/VkImage2D") && call.name.equals("transition")) {
+                var args = trailingConstants(call, 5);
+                if (args[0] == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && args[2] == VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) {
+                    assertEquals(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                            args[1], "Depth writes need EARLY and LATE_FRAGMENT_TESTS");
+                    depthCalls++;
+                }
+                if (args[0] == VK_IMAGE_LAYOUT_GENERAL) {
+                    assertArrayEquals(new int[]{VK_IMAGE_LAYOUT_GENERAL,
+                                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+                                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT}, args,
+                            "SSAO overwrite must follow colour attachment writes and compositor reads");
+                    outputCalls++;
+                }
+            }
+        }
+        assertEquals(2, hostCalls);
+        assertEquals(1, depthCalls);
+        assertEquals(1, outputCalls);
+    }
+
+    private static int[] trailingConstants(MethodInsnNode call, int count) {
+        var values = new int[count];
+        var instruction = call.getPrevious();
+        for (int i = count - 1; i >= 0; i--) {
+            while (instruction.getOpcode() < 0) instruction = instruction.getPrevious();
+            if (instruction instanceof org.objectweb.asm.tree.IntInsnNode n) values[i] = n.operand;
+            else if (instruction instanceof org.objectweb.asm.tree.LdcInsnNode n) values[i] = (Integer) n.cst;
+            else {
+                assertTrue(instruction.getOpcode() >= org.objectweb.asm.Opcodes.ICONST_M1
+                        && instruction.getOpcode() <= org.objectweb.asm.Opcodes.ICONST_5);
+                values[i] = instruction.getOpcode() - org.objectweb.asm.Opcodes.ICONST_0;
+            }
+            instruction = instruction.getPrevious();
+        }
+        return values;
+    }
+
     @Test
     void bundledShadercCompilesTheHostCompositor() {
         var definitions = java.util.Map.of("USE_REVERSE_Z", "", "USE_ZERO_ONE_DEPTH", "", "EMIT_COLOUR", "");

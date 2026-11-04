@@ -31,31 +31,30 @@ public final class VkFrameHost {
         return VulkanConst.toVk(view.texture().getFormat());
     }
 
-    //Layout-transition one of MC's own images (colour/depth attachment) with
-    // scoped stage/access masks matching the actual producer/consumer — MC just
-    // rendered into the depth attachment (LATE_FRAGMENT_TESTS write), and Voxy
-    // samples it (FRAGMENT_SHADER read), so the previous ALL_COMMANDS masks
-    // (which serialised the transition with unrelated compute) are narrowed.
-    // Used to bracket sampling of MC's attachments mid-frame (they live in
-    // GENERAL otherwise).
+    //Bracket sampling of MC's attachments (GENERAL otherwise). Compositing
+    // samples in fragment shaders; SSAO must supply the compute sampling stage.
     public static void transitionMcImage(VkCommandBuffer cmd, GpuTextureView view,
                                           boolean depth, int oldLayout, int newLayout) {
+        transitionMcImage(cmd, view, depth, oldLayout, newLayout, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+    }
+
+    public static void transitionMcImage(VkCommandBuffer cmd, GpuTextureView view,
+                                          boolean depth, int oldLayout, int newLayout, int sampledStage) {
         try (MemoryStack stack = stackPush()) {
             long image = ((VulkanGpuTexture) view.texture()).vkImage();
-            //MC's depth attachment is written by the late fragment tests; MC's
-            // colour by the fragment shader. Voxy reads both from the fragment
-            // shader (sampler). Reverse transitions are FRAGMENT_SHADER read ->
-            // late-fragment-tests write.
+            //Depth writes can occur in early or late tests; colour writes occur
+            // at colour attachment output. Reverse barriers finish sampling
+            // before either attachment is reused.
             int srcStage, srcAccess, dstStage, dstAccess;
             boolean toSampled = newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             if (depth) {
                 if (toSampled) {
                     srcStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
                     srcAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-                    dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                    dstStage = sampledStage;
                     dstAccess = VK_ACCESS_SHADER_READ_BIT;
                 } else {
-                    srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                    srcStage = sampledStage;
                     srcAccess = VK_ACCESS_SHADER_READ_BIT;
                     dstStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
                     dstAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
@@ -64,10 +63,10 @@ public final class VkFrameHost {
                 if (toSampled) {
                     srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                     srcAccess = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-                    dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                    dstStage = sampledStage;
                     dstAccess = VK_ACCESS_SHADER_READ_BIT;
                 } else {
-                    srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                    srcStage = sampledStage;
                     srcAccess = VK_ACCESS_SHADER_READ_BIT;
                     dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
                     dstAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
