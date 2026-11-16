@@ -104,7 +104,9 @@ public class VoxyClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         DebugEntries.init();
+        VoxyKeybinds.init();
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            VoxyKeybinds.tick(client);
             if (VoxyCommon.getInstance() instanceof VoxyClientInstance instance) instance.tickStorageCatchUp();
         });
 

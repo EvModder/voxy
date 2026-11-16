@@ -98,10 +98,11 @@ public class VoxyClientInstance extends VoxyInstance {
         this.beacons.tick(currentLevel, VoxyConfig.CONFIG.enabled && this.isIngestEnabled(WorldIdentifier.of(currentLevel)));
         if (this.catchUpIndex < 0) return;
         var level = Minecraft.getInstance().level;
-        if (!this.catchUpWorld.equals(WorldIdentifier.of(level)) || !this.isIngestEnabled(this.catchUpWorld)) {
+        if (!this.catchUpWorld.equals(WorldIdentifier.of(level))) {
             this.catchUpIndex = -1;
             return;
         }
+        if (!this.isIngestEnabled(this.catchUpWorld)) return;// Resume once ingest is unpaused
         // Revisit chunks received during migration, without one large main-thread ingest burst.
         this.catchUpIndex = ((ICheekyClientChunkCache) level.getChunkSource())
                 .voxy$ingestLoadedChunks(this.catchUpIndex, 4);
@@ -122,7 +123,7 @@ public class VoxyClientInstance extends VoxyInstance {
 
     @Override
     public boolean isIngestEnabled(WorldIdentifier worldId) {
-        return (!this.noIngestOverride) && VoxyConfig.CONFIG.ingestEnabled;
+        return (!this.noIngestOverride) && VoxyConfig.CONFIG.isIngestEnabled();
     }
 
     @Override

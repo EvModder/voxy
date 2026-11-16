@@ -30,6 +30,8 @@ public class VoxyConfig {
     public boolean enableRendering = true;
     public boolean distantBeaconBeams = true;
     public boolean ingestEnabled = true;
+    // Session-only pauses toggled by keybinds. Private, so they are never saved: a restart always resumes.
+    private boolean ingestPaused, renderingPaused;
     public float sectionRenderDistance = 16;
     public int serviceThreads = (int) Math.max(CpuLayout.getCoreCount()/1.5, 1);
     public float subDivisionSize = 64;
@@ -111,6 +113,15 @@ public class VoxyConfig {
     }
 
     public boolean isRenderingEnabled() {
-        return VoxyCommon.isAvailable() && this.enabled && this.enableRendering;
+        return VoxyCommon.isAvailable() && this.enabled && this.enableRendering && !this.renderingPaused;
     }
+
+    public boolean isIngestEnabled() {
+        return this.ingestEnabled && !this.ingestPaused;
+    }
+
+    public boolean isIngestPaused() { return this.ingestPaused; }
+    public void setIngestPaused(boolean paused) { this.ingestPaused = paused; }
+    public boolean isRenderingPaused() { return this.renderingPaused; }
+    public void setRenderingPaused(boolean paused) { this.renderingPaused = paused; }
 }

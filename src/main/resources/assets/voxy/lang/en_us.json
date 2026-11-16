@@ -1,6 +1,15 @@
 {
   "voxy.config.title": "Voxy",
 
+  "key.category.voxy.main": "Voxy",
+  "key.voxy.toggle_ingest": "Toggle chunk ingest",
+  "key.voxy.toggle_rendering": "Toggle rendering",
+  "voxy.toggle.ingest": "Voxy ingest: %s",
+  "voxy.toggle.rendering": "Voxy rendering: %s",
+  "voxy.toggle.on": "on",
+  "voxy.toggle.off": "off (until toggled or disconnect)",
+  "voxy.toggle.disabled_in_settings": "off in Voxy settings",
+
   "voxy.config.general": "General",
   "voxy.config.rendering": "Rendering",
 

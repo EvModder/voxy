@@ -59,7 +59,7 @@ public class MixinRenderSectionManager {
     @Inject(method = "onChunkRemoved", at = @At("HEAD"))
     private void voxy$injectIngest(int x, int z, CallbackInfo ci) {
         //TODO: Am not quite sure if this is right
-        if (VoxyConfig.CONFIG.ingestEnabled && !BOBBY_INSTALLED) {
+        if (VoxyConfig.CONFIG.isIngestEnabled() && !BOBBY_INSTALLED) {
             var cccm = (ICheekyClientChunkCache)this.level.getChunkSource();
             if (cccm != null) {
                 var chunk = cccm.voxy$cheekyGetChunk(x, z);
@@ -73,7 +73,7 @@ public class MixinRenderSectionManager {
 
     @Inject(method = "onChunkAdded", at = @At("HEAD"))
     private void voxy$ingestOnAdd(int x, int z, CallbackInfo ci) {
-        if (this.level != null && VoxyConfig.CONFIG.ingestEnabled) {
+        if (this.level != null && VoxyConfig.CONFIG.isIngestEnabled()) {
             var cccm = this.level.getChunkSource();
             if (cccm != null) {
                 var chunk = cccm.getChunk(x, z, ChunkStatus.FULL, false);
@@ -100,7 +100,7 @@ public class MixinRenderSectionManager {
         }
         int x = instance.getChunkX(), y = instance.getChunkY(), z = instance.getChunkZ();
 
-        if (!isInvisible && VoxyConfig.CONFIG.ingestEnabled) {
+        if (!isInvisible && VoxyConfig.CONFIG.isIngestEnabled()) {
             var tracker = ((AccessorChunkTracker) ChunkTrackerHolder.get(this.level)).getChunkStatus();
             //in theory the cache value could be wrong but is so soso unlikely and at worst means we either duplicate ingest a chunk
             // which... could be bad ;-; or we dont ingest atall which is ok!
