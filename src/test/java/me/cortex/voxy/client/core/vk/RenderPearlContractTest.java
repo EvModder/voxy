@@ -104,6 +104,7 @@ class RenderPearlContractTest {
     void requiredMinecraftAndSodiumInjectionMethodsStillExist() throws IOException {
         var loader = getClass().getClassLoader();
         var failures = new ArrayList<String>();
+        var groupMatches = new java.util.HashMap<String, Boolean>();
         try (var reader = new InputStreamReader(loader.getResourceAsStream("client.voxy.mixins.json"))) {
             var config = com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();
             for (var entry : config.getAsJsonArray("client")) {
@@ -131,6 +132,12 @@ class RenderPearlContractTest {
                     }
                     for (var method : mixin.methods) {
                         if (method.visibleAnnotations == null) continue;
+                        // Grouped alternatives (one per Sodium version) only need one member to match.
+                        String group = java.util.stream.Stream.of(method.visibleAnnotations, method.invisibleAnnotations)
+                                .filter(java.util.Objects::nonNull).flatMap(List::stream)
+                                .filter(a -> a.desc.equals("Lorg/spongepowered/asm/mixin/injection/Group;"))
+                                .map(a -> name + "#" + value(a, "name")).findFirst().orElse(null);
+                        if (group != null) groupMatches.putIfAbsent(group, false);
                         for (var injector : method.visibleAnnotations) {
                             var selectors = value(injector, "method");
                             if (!(selectors instanceof List<?> list)) continue;
@@ -162,7 +169,9 @@ class RenderPearlContractTest {
                                     boolean found = selected.stream().flatMap(m -> java.util.Arrays.stream(m.instructions.toArray()))
                                             .anyMatch(i -> i instanceof MethodInsnNode call
                                                     && invoked.equals("L" + call.owner + ";" + call.name + call.desc));
-                                    if (!found) failures.add(name + " -> " + signature + " invokes " + invoked);
+                                    if (group != null) {
+                                        if (found) groupMatches.put(group, true);
+                                    } else if (!found) failures.add(name + " -> " + signature + " invokes " + invoked);
                                 }
                             }
                         }
@@ -170,6 +179,9 @@ class RenderPearlContractTest {
                 }
             }
         }
+        groupMatches.forEach((group, matched) -> {
+            if (!matched) failures.add(group + " -> no injector matches");
+        });
         assertTrue(failures.isEmpty(), failures.toString());
     }
 
