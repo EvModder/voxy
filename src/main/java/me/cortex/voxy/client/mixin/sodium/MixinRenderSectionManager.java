@@ -3,9 +3,10 @@ package me.cortex.voxy.client.mixin.sodium;
 import me.cortex.voxy.client.ICheekyClientChunkCache;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.IVoxyRenderSystemHolder;
-import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.util.IrisUtil;
 import me.cortex.voxy.common.world.service.VoxelIngestService;
+import me.cortex.voxy.commonImpl.VoxyCommon;
+import me.cortex.voxy.commonImpl.WorldIdentifier;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSection;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.data.BuiltSectionInfo;
@@ -94,39 +95,40 @@ public class MixinRenderSectionManager {
     private int voxy$updateOnUpload(RenderSection instance, BuiltSectionInfo info) {
         boolean isInvisible = instance.isInvisible();
         int changes = instance.setInfo(info);
-        VoxyRenderSystem vrs = null;
-        if (isInvisible == instance.isInvisible() || changes == 0 || (vrs = IVoxyRenderSystemHolder.getNullable()) == null) {
+        // Only a section that was visible and is now invisible (emptied) is ingested here. This must not depend
+        // on Voxy's renderer, since rendering may be off while ingest stays on.
+        WorldIdentifier world;
+        if (isInvisible || !instance.isInvisible() || changes == 0 || VoxyCommon.getInstance() == null
+                || !VoxyConfig.CONFIG.isIngestEnabled() || (world = WorldIdentifier.of(this.level)) == null) {
             return changes;
         }
         int x = instance.getChunkX(), y = instance.getChunkY(), z = instance.getChunkZ();
 
-        if (!isInvisible && VoxyConfig.CONFIG.isIngestEnabled()) {
-            var tracker = ((AccessorChunkTracker) ChunkTrackerHolder.get(this.level)).getChunkStatus();
-            //in theory the cache value could be wrong but is so soso unlikely and at worst means we either duplicate ingest a chunk
-            // which... could be bad ;-; or we dont ingest atall which is ok!
-            long key = ChunkPos.pack(x, z);
-            if (key != this.cachedChunkPos) {
-                this.cachedChunkPos = key;
-                this.cachedChunkStatus = tracker.getOrDefault(key, 0);
-            }
-            if (this.cachedChunkStatus == 3) {//If this chunk still has surrounding chunks
-                var cccm = this.level.getChunkSource();
-                //var chunk = ((ICheekyClientChunkCache)cccm).voxy$cheekyGetChunk(x, z);
-                //Dont thinks need to use cheekyGetChunk here as thats handled by the inject into head of onChunkRemoved
-                // but only ingest if the chunkstatus is full and exists
-                var chunk = cccm.getChunk(x, z, ChunkStatus.FULL, false);
-                if (chunk != null) {
-                    var section = chunk.getSection(y - this.bottomSectionY);
-                    var lp = this.level.getLightEngine();
+        var tracker = ((AccessorChunkTracker) ChunkTrackerHolder.get(this.level)).getChunkStatus();
+        //in theory the cache value could be wrong but is so soso unlikely and at worst means we either duplicate ingest a chunk
+        // which... could be bad ;-; or we dont ingest atall which is ok!
+        long key = ChunkPos.pack(x, z);
+        if (key != this.cachedChunkPos) {
+            this.cachedChunkPos = key;
+            this.cachedChunkStatus = tracker.getOrDefault(key, 0);
+        }
+        if (this.cachedChunkStatus == 3) {//If this chunk still has surrounding chunks
+            var cccm = this.level.getChunkSource();
+            //var chunk = ((ICheekyClientChunkCache)cccm).voxy$cheekyGetChunk(x, z);
+            //Dont thinks need to use cheekyGetChunk here as thats handled by the inject into head of onChunkRemoved
+            // but only ingest if the chunkstatus is full and exists
+            var chunk = cccm.getChunk(x, z, ChunkStatus.FULL, false);
+            if (chunk != null) {
+                var section = chunk.getSection(y - this.bottomSectionY);
+                var lp = this.level.getLightEngine();
 
-                    var csp = SectionPos.of(x, y, z);
-                    var blp = lp.getLayerListener(LightLayer.BLOCK).getDataLayerData(csp);
-                    var slp = lp.getLayerListener(LightLayer.SKY).getDataLayerData(csp);
+                var csp = SectionPos.of(x, y, z);
+                var blp = lp.getLayerListener(LightLayer.BLOCK).getDataLayerData(csp);
+                var slp = lp.getLayerListener(LightLayer.SKY).getDataLayerData(csp);
 
-                    //Note: we dont do this check and just blindly ingest, it shouldbe ok :tm:
-                    //if (blp != null || slp != null)
-                    VoxelIngestService.rawIngest(vrs.getEngine(), section, x, y, z, blp == null ? null : blp.copy(), slp == null ? null : slp.copy());
-                }
+                //Note: we dont do this check and just blindly ingest, it shouldbe ok :tm:
+                //if (blp != null || slp != null)
+                VoxelIngestService.rawIngest(world, section, x, y, z, blp == null ? null : blp.copy(), slp == null ? null : slp.copy());
             }
         }
 

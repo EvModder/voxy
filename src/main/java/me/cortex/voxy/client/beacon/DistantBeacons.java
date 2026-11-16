@@ -85,7 +85,8 @@ public final class DistantBeacons {
     }
 
     public static void extract(ClientLevel level, LevelRenderState state) {
-        if (!VoxyConfig.CONFIG.distantBeaconBeams || level == null
+        // No renderer consumes the frame while rendering is off.
+        if (!VoxyConfig.CONFIG.distantBeaconBeams || !VoxyConfig.CONFIG.isRenderingEnabled() || level == null
                 || !(VoxyCommon.getInstance() instanceof VoxyClientInstance instance)) {
             clearFrame(state);
             return;
